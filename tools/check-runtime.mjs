@@ -7,6 +7,13 @@
 // `Function`, or calls or constructs through a property named `constructor` (`f.constructor("return
 // this")`), each of which reaches the global object from a string of code.
 //
+// And it allows exactly the globals the build uses, and nothing more: every identifier that refers to a name
+// the file does not declare -- resolved by TypeScript's own checker over the file alone, with no library, so a
+// name the file declares in any scope is the file's own -- must be one of ALLOWED_GLOBALS, the JavaScript
+// built-ins the build needs, so a platform global such as MessageChannel, EventSource, Worker,
+// BroadcastChannel, RTCPeerConnection or Atomics fails however it is reached by name; a test holds the list
+// to exactly the globals the built files name, so a built-in the build stops using leaves the list with it.
+//
 // It also allows exactly the platform slice VS1 names, and nothing more. The members a browser's objects
 // reachable through the slice hold -- every member TypeScript's own lib.dom.d.ts declares on Document,
 // XMLDocument, every SVG element interface, DOMMatrix and DOMMatrixReadOnly, and every interface they extend,
@@ -17,8 +24,10 @@
 // application hands a conversion (VS2 rule 6), names an svg element also holds. A platform member outside
 // the slice -- getAttribute, childNodes, getBoundingClientRect, parentNode, querySelector, children,
 // innerHTML and the rest -- is a finding wherever it is named as a member: by dot, by brackets with a string
-// literal, in a destructuring pattern, on the left of `in`, or as the literal key of a Reflect call. A
-// member reached by a computed key the walk cannot name is beyond any static check; the recording test
+// literal, in a destructuring pattern, on the left of `in`, as the literal key of a Reflect call or of
+// Object.getOwnPropertyDescriptor, Object.hasOwn or Object.defineProperty, or as the literal argument of
+// hasOwnProperty, propertyIsEnumerable or a __lookupGetter__-like method, called directly or through call.
+// A member reached by a computed key the walk cannot name is beyond any static check; the recording test
 // (CONTRACT.md I3) holds what the scene touches at run time.
 //
 // Each file is parsed by TypeScript into a syntax tree (ts.createSourceFile, ScriptKind.JS, as a
@@ -28,6 +37,7 @@
 // - every call whose callee is the `import` keyword -- a dynamic import;
 // - every identifier, except the name of a property access (`a.self`, `a?.self`), which is a member and
 //   not the global; an object-literal key (`{ self: 1 }`) is an identifier and is counted;
+// - every identifier the checker finds refers to no declaration of the file, against ALLOWED_GLOBALS;
 // - every call or `new` whose callee is a property named `constructor`, by dot or by brackets with a
 //   string literal -- any function's constructor being `Function`;
 // - every member named as the paragraph above says, against the platform slice.
@@ -42,6 +52,9 @@ import ts from "typescript";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const RUNTIME_NAMES = ["process", "require", "Buffer", "window", "document", "self", "global", "globalThis", "eval", "Function"];
 
+/** The globals the build names, every one a JavaScript built-in it needs: the only names a built file may use without declaring them. */
+export const ALLOWED_GLOBALS = Object.freeze(["Array", "Error", "JSON", "Map", "Math", "Number", "Object", "Reflect", "Set", "String", "TypeError", "WeakMap", "undefined"]);
+
 /** VS1's platform slice, and the point's x and y (VS2 rule 6): the only platform members a built file may name. */
 export const PLATFORM_SLICE = Object.freeze({
 	root: ["ownerDocument", "appendChild", "getScreenCTM"],
@@ -52,6 +65,8 @@ export const PLATFORM_SLICE = Object.freeze({
 });
 const ALLOWED_MEMBERS = new Set(Object.values(PLATFORM_SLICE).flat());
 const REFLECT_WITH_KEY = new Set(["get", "set", "has", "getOwnPropertyDescriptor", "defineProperty", "deleteProperty"]);
+const OBJECT_WITH_KEY = new Set(["getOwnPropertyDescriptor", "hasOwn", "defineProperty"]);
+const METHOD_WITH_KEY = new Set(["hasOwnProperty", "propertyIsEnumerable", "__lookupGetter__", "__lookupSetter__", "__defineGetter__", "__defineSetter__"]);
 
 let platformMembers = null;
 
@@ -121,10 +136,62 @@ function membersNamedBy(node) {
 		return node.left.properties.flatMap((property) => (property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) ? [property.name.text] : []));
 	}
 	if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.InKeyword) return [literalText(node.left)].filter((name) => name !== undefined);
-	if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === "Reflect" && REFLECT_WITH_KEY.has(node.expression.name.text)) {
-		return [literalText(node.arguments[1])].filter((name) => name !== undefined);
+	if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+		const callee = node.expression;
+		const on = ts.isIdentifier(callee.expression) ? callee.expression.text : undefined;
+		const keyAt = (index) => [literalText(node.arguments[index])].filter((name) => name !== undefined);
+		// Reflect.get(target, "k") and its kin; Object.getOwnPropertyDescriptor(target, "k"), Object.hasOwn and Object.defineProperty
+		if ((on === "Reflect" && REFLECT_WITH_KEY.has(callee.name.text)) || (on === "Object" && OBJECT_WITH_KEY.has(callee.name.text))) return keyAt(1);
+		// target.hasOwnProperty("k") and its kin
+		if (METHOD_WITH_KEY.has(callee.name.text)) return keyAt(0);
+		// Object.prototype.hasOwnProperty.call(target, "k") and its kin
+		if (callee.name.text === "call" && ts.isPropertyAccessExpression(callee.expression) && METHOD_WITH_KEY.has(callee.expression.name.text)) return keyAt(1);
 	}
 	return [];
+}
+
+/** True when an identifier stands for a value it names, rather than for a member's, a key's, a label's or an import's or export's name. */
+function isReference(node) {
+	const parent = node.parent;
+	if ((ts.isPropertyAccessExpression(parent) || ts.isQualifiedName(parent)) && parent.name === node) return false;
+	if ((ts.isPropertyAssignment(parent) || ts.isMethodDeclaration(parent) || ts.isPropertyDeclaration(parent) || ts.isGetAccessor(parent) || ts.isSetAccessor(parent)) && parent.name === node) return false;
+	if (ts.isBindingElement(parent) && parent.propertyName === node) return false;
+	if (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent) || ts.isImportClause(parent) || ts.isNamespaceImport(parent) || ts.isNamespaceExport(parent)) return false;
+	if (ts.isLabeledStatement(parent) || ts.isBreakStatement(parent) || ts.isContinueStatement(parent) || ts.isMetaProperty(parent)) return false;
+	return true;
+}
+
+/**
+ * Every identifier of a parsed file that refers to no declaration of the file -- a global -- as [{ name, line }],
+ * in source order: TypeScript's checker resolves each over the file alone, with no library, so a name the file
+ * declares in any enclosing scope is its own, and `arguments` and `undefined`, which resolve to no declaration
+ * of the file, are globals here.
+ */
+export function freeGlobalReferences(file) {
+	const host = {
+		getSourceFile: (name) => (name === file.fileName ? file : undefined),
+		getDefaultLibFileName: () => "lib.d.ts",
+		writeFile() {},
+		getCurrentDirectory: () => "/",
+		getDirectories: () => [],
+		fileExists: (name) => name === file.fileName,
+		readFile: (name) => (name === file.fileName ? file.text : undefined),
+		getCanonicalFileName: (name) => name,
+		useCaseSensitiveFileNames: () => true,
+		getNewLine: () => "\n",
+	};
+	const program = ts.createProgram([file.fileName], { allowJs: true, noLib: true, noResolve: true, types: [], target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext }, host);
+	const checker = program.getTypeChecker();
+	const found = [];
+	const visit = (node) => {
+		if (ts.isIdentifier(node) && isReference(node)) {
+			const symbol = ts.isShorthandPropertyAssignment(node.parent) && node.parent.name === node ? checker.getShorthandAssignmentValueSymbol(node.parent) : checker.getSymbolAtLocation(node);
+			if (!(symbol?.declarations ?? []).some((declaration) => declaration.getSourceFile() === file)) found.push({ name: node.text, line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1 });
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(file);
+	return found;
 }
 
 /** Every runtime finding in a built file's source: [{ line, finding }], in source order. */
@@ -150,7 +217,11 @@ export function findRuntimeUses(source, fileName) {
 		ts.forEachChild(node, visit);
 	};
 	visit(file);
-	return found;
+	for (const { name, line } of freeGlobalReferences(file)) {
+		if (ALLOWED_GLOBALS.includes(name) || found.some((f) => f.line === line && f.finding === `names ${name}`)) continue;
+		found.push({ line, finding: `names the global ${name}, which is none of the built-ins the build uses` });
+	}
+	return found.sort((a, b) => a.line - b.line);
 }
 
 function jsFilesUnder(target) {
@@ -183,5 +254,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 		console.log(`check-runtime: FAIL -- ${findings} runtime-specific use(s) in ${files.length} built file(s)`);
 		process.exit(1);
 	}
-	console.log(`check-runtime: PASS -- ${files.length} built file(s) import only relative files, name no runtime's globals, and name no platform member outside VS1's slice`);
+	console.log(`check-runtime: PASS -- ${files.length} built file(s) import only relative files, name no global but the built-ins the build uses, and name no platform member outside VS1's slice`);
 }

@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 import { candidateWords, findVocabulary, readVocabulary, splitWords } from "../../tools/check-vocabulary.mjs";
 import { findClockAndChance } from "../../tools/check-clock-and-chance.mjs";
-import { findRuntimeUses, PLATFORM_SLICE, platformMemberNames } from "../../tools/check-runtime.mjs";
+import { ALLOWED_GLOBALS, findRuntimeUses, freeGlobalReferences, parseModule, PLATFORM_SLICE, platformMemberNames } from "../../tools/check-runtime.mjs";
 import { findConfigProblems, findSourceProblems, sourceProblems } from "../../tools/check-source.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -137,6 +137,70 @@ test("I12, VS1: the runtime check fails on a platform member outside the slice -
 	}
 });
 
+test("I12, VS1: a DOM member outside the slice named as the literal key of Object.getOwnPropertyDescriptor, Object.hasOwn, Object.defineProperty, Reflect.has, Reflect.get, in, or hasOwnProperty is found as a read is; a variable key and a slice member pass", () => {
+	const finding = (name) => `names ${name}, a platform member outside VS1's slice`;
+	const planted = [
+		["export const a = (el) => Object.getOwnPropertyDescriptor(el, \"childNodes\");\n", "childNodes"],
+		["export const b = (el) => Object.hasOwn(el, \"getAttribute\");\n", "getAttribute"],
+		["export const c = (el) => Object.defineProperty(el, \"innerHTML\", { value: \"\" });\n", "innerHTML"],
+		["export const d = (el) => Reflect.has(el, \"getBoundingClientRect\");\n", "getBoundingClientRect"],
+		["export const e = (el) => Reflect.get(el, `parentNode`);\n", "parentNode"],
+		["export const f = (el) => Reflect.getOwnPropertyDescriptor(el, \"firstChild\");\n", "firstChild"],
+		["export const g = (el) => \"querySelector\" in el;\n", "querySelector"],
+		["export const h = (el) => el.hasOwnProperty(\"children\");\n", "children"],
+		["export const i = (el) => Object.prototype.hasOwnProperty.call(el, \"classList\");\n", "classList"],
+		["export const j = (el) => el.propertyIsEnumerable(\"style\");\n", "style"],
+		["export const k = (el) => el.__lookupGetter__(\"attributes\");\n", "attributes"],
+	];
+	for (const [text, name] of planted) assert.deepEqual(findRuntimeUses(text).map((f) => f.finding), [finding(name)], text);
+	const clean = [
+		"export const a = (value, name) => Object.getOwnPropertyDescriptor(value, name) ?? Reflect.getOwnPropertyDescriptor(value, \"length\");\n",
+		"export const b = (point) => Object.hasOwn(point, \"x\") && Reflect.has(point, \"y\") && \"x\" in point;\n",
+		"export const c = (attrs, name) => Object.defineProperty(attrs, name, { value: \"1\" });\n",
+		"export const d = (el, text) => Reflect.set(el, \"textContent\", text) && Reflect.get(el, \"remove\");\n",
+		"export const e = (record) => record.hasOwnProperty(\"tag\") && Object.hasOwn(record, \"children\" + \"\");\n",
+	];
+	for (const text of clean) assert.deepEqual(findRuntimeUses(text), [], text);
+});
+
+test("I12: the runtime check allows only the globals the build uses -- exactly the built-ins its built files name -- so a platform global fails however it is named", () => {
+	const named = new Set();
+	for (const file of fs.readdirSync(path.join(root, "dist")).filter((f) => f.endsWith(".js"))) {
+		for (const { name } of freeGlobalReferences(parseModule(fs.readFileSync(path.join(root, "dist", file), "utf8"), file))) named.add(name);
+	}
+	assert.deepEqual([...named].sort(), [...ALLOWED_GLOBALS].sort(), "the allow-list is exactly the globals the built files name");
+	const finding = (name) => `names the global ${name}, which is none of the built-ins the build uses`;
+	const globals = ["MessageChannel", "EventSource", "Worker", "SharedWorker", "BroadcastChannel", "RTCPeerConnection", "Atomics", "SharedArrayBuffer", "WebSocket", "XMLHttpRequest", "fetch", "navigator", "location", "localStorage", "indexedDB", "postMessage", "structuredClone", "queueMicrotask", "Promise", "Proxy", "Symbol", "Date", "Intl", "WeakRef", "arguments"];
+	for (const name of globals) {
+		assert.deepEqual(findRuntimeUses(`export const planted = () => ${name};\n`).map((f) => f.finding), [finding(name)], name);
+	}
+	assert.deepEqual(findRuntimeUses("export const a = new MessageChannel();\n").map((f) => f.finding), [finding("MessageChannel")], "constructed");
+	assert.deepEqual(findRuntimeUses("export const a = typeof Worker;\n").map((f) => f.finding), [finding("Worker")], "under typeof");
+	assert.deepEqual(findRuntimeUses("export const a = { Atomics };\n").map((f) => f.finding), [finding("Atomics")], "a shorthand property is a reference");
+	assert.deepEqual(findRuntimeUses("export function f() { return Worker; }\nfunction g() { const Worker = 1; return Worker; }\nexport { g };\n").map((f) => [f.line, f.finding]), [[1, finding("Worker")]], "a name declared in another scope does not cover this one");
+	const clean = [
+		`export const a = () => [${ALLOWED_GLOBALS.join(", ")}];\n`,
+		"const Worker = 1; export const a = Worker;\n",
+		"export const a = (MessageChannel) => MessageChannel;\n",
+		"export function f({ EventSource }) { return EventSource; }\n",
+		"export const a = (x) => x.Worker + x?.Atomics + ({ BroadcastChannel: 1 }).BroadcastChannel;\n",
+		"// MessageChannel, Worker and Atomics in a comment\nexport const s = \"new Worker(MessageChannel)\";\n",
+		"export class Atomics2 { method() { return this.RTCPeerConnection; } }\n",
+		"label: for (;;) { break label; }\nexport {};\n",
+		"try { void 0; } catch (error) { void error; }\nexport {};\n",
+		"import { Worker } from \"./worker.js\";\nexport const w = Worker;\n",
+	];
+	for (const text of clean) assert.deepEqual(findRuntimeUses(text), [], text);
+	const dir = scratch(Object.fromEntries(globals.slice(0, 7).map((name, i) => [`global-${i}.js`, `export const planted = () => ${name};\n`])));
+	try {
+		const r = run("check-runtime.mjs", dir);
+		assert.equal(r.status, 1);
+		globals.slice(0, 7).forEach((name, i) => assert.match(r.stdout, new RegExp(`global-${i}\\.js:1  names the global ${name},`)));
+	} finally {
+		fs.rmSync(dir, { recursive: true, force: true });
+	}
+});
+
 test("I12, VS1: getAttribute, childNodes and getBoundingClientRect planted in a copy of the built files are each found", () => {
 	for (const [plant, name] of [["export const planted = (el) => el.getAttribute(\"id\");\n", "getAttribute"], ["export const planted = (el) => el.childNodes.length;\n", "childNodes"], ["export const planted = (el) => el.getBoundingClientRect().x;\n", "getBoundingClientRect"]]) {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vector-scene-dist-"));
@@ -192,7 +256,7 @@ test("I12: the runtime check passes over dist, and fails on a bare or node: impo
 });
 
 test("I12: the runtime check reads names in code only, never in comments or strings, nor as members", () => {
-	const clean = '// globalThis, process and require( in a comment\nimport { a } from "./a.js";\nexport * from "../b.js";\nconst s = "window document self";\nconst q = \'process\';\nconst t = `import("x") ${a.process}`;\nconst o = { x: options.self };\nconst d = a / b / c;\nconst r = [/"/g, /\\//];\n/* Buffer */\n';
+	const clean = '// globalThis, process and require( in a comment\nimport { a } from "./a.js";\nconst options = {}, b = 1, c = 2;\nexport * from "../b.js";\nconst s = "window document self";\nconst q = \'process\';\nconst t = `import("x") ${a.process}`;\nconst o = { x: options.self };\nconst d = a / b / c;\nconst r = [/"/g, /\\//];\n/* Buffer */\n';
 	assert.deepEqual(findRuntimeUses(clean), []);
 	assert.deepEqual(findRuntimeUses("const t = `a ${globalThis.x} b`;\n").map((f) => f.finding), ["names globalThis"]);
 	assert.deepEqual(findRuntimeUses("const r = /'/; const p = process.env;\n").map((f) => f.finding), ["names process"], "a quote inside a regular expression begins no string");
@@ -201,11 +265,11 @@ test("I12: the runtime check reads names in code only, never in comments or stri
 	assert.deepEqual(findRuntimeUses("if (Math.PI) /'/.test(''); globalThis.x = 1; //'\n").map((f) => f.finding), ["names globalThis"], "a regular expression after ) is no division");
 	assert.deepEqual(findRuntimeUses("{} /'/.test(''); process.exit(); //'\n").map((f) => f.finding), ["names process"], "a regular expression after a block's } is no division");
 	assert.deepEqual(findRuntimeUses("const o = { self: 1 };\n").map((f) => f.finding), ["names self"], "an object-literal key is counted");
-	assert.deepEqual(findRuntimeUses("const m = import.meta.url; const n = a?.process;\n"), [], "import.meta is no dynamic import, and an optional member is a member");
-	assert.deepEqual(findRuntimeUses('const a = x.eval; const b = y.Function; const s = "eval(Function)"; const c = o.constructor; const d = o.constructor === Object; // eval\n'), [], "eval and Function as members, in strings and comments, and a constructor read but not called, pass");
+	assert.deepEqual(findRuntimeUses("const a = {}; const m = import.meta.url; const n = a?.process;\n"), [], "import.meta is no dynamic import, and an optional member is a member");
+	assert.deepEqual(findRuntimeUses('const x = {}, y = {}, o = {}; const a = x.eval; const b = y.Function; const s = "eval(Function)"; const c = o.constructor; const d = o.constructor === Object; // eval\n'), [], "eval and Function as members, in strings and comments, and a constructor read but not called, pass");
 	assert.deepEqual(findRuntimeUses('const g = eval("this");\n').map((f) => f.finding), ["names eval"]);
 	assert.deepEqual(findRuntimeUses('const g = new Function("return this")();\n').map((f) => f.finding), ["names Function"]);
-	assert.deepEqual(findRuntimeUses('const g = f.constructor("return this")();\n').map((f) => f.finding), ["calls through a property named constructor, which reaches Function"]);
+	assert.deepEqual(findRuntimeUses('const f = () => 0; const g = f.constructor("return this")();\n').map((f) => f.finding), ["calls through a property named constructor, which reaches Function"]);
 	assert.throws(() => findRuntimeUses('const s = "open;\n'), /could not parse/);
 });
 
