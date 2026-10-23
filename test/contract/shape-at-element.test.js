@@ -75,18 +75,42 @@ test("VS9: shapes nested 32 deep -- the element at depth 32 answers a path of 32
 	assert.deepEqual(scene.itemOf(element).path, [0, ...Array(31).fill(1)]);
 });
 
-test("I7: itemOf answers every element made after patches, moves, replacements and removals, over generated sequences", () => {
+test("I7: itemOf answers every element made after patches, moves, replacements and removals, over generated sequences, and null for every element the scene made and removed, at any depth", () => {
 	const { scene, items, back } = rooted();
 	const rnd = seededRandom(11);
-	let checked = 0;
+	const ever = new Set();
+	let checked = 0, gone = 0;
 	for (let n = 0; n < 300; n++) {
 		const layer = n % 3 === 0 ? "back" : "items";
 		const op = randomOperation(rnd, scene.items(layer).map((item) => item.key));
 		if (op.kind === "put") scene.put(layer, op.key, op.shapes, op.place);
 		else scene.remove(layer, op.key);
 		checked += answersEveryElement(scene, items, "items") + answersEveryElement(scene, back, "back");
+		const present = new Set([...elementsBeneath(items), ...elementsBeneath(back)]);
+		for (const element of present) ever.add(element);
+		for (const element of ever) {
+			if (present.has(element)) continue;
+			assert.equal(scene.itemOf(element), null, `step ${n}: an element removed, ${element.tag} ${element.serial}, still answers`);
+			gone++;
+		}
 	}
 	assert.ok(checked > 5000, `${checked} elements answered`);
+	assert.ok(gone > 5000, `${gone} answers for removed elements`);
+});
+
+test("I7: an element removed answers null with every element beneath it -- by remove, by a replacement of another tag, by children giving way to text", () => {
+	const { scene, items } = rooted();
+	const nested = [{ tag: "g", children: [{ tag: "g", children: [{ tag: "rect" }, { tag: "g", children: [{ tag: "circle" }] }] }] }];
+	for (const takeAway of [() => scene.remove("items", "a"), () => scene.put("items", "a", [{ tag: "path" }]), () => scene.put("items", "a", [{ tag: "g", text: "text now" }])]) {
+		scene.remove("items", "a");
+		scene.put("items", "a", nested);
+		const top = items.children[0];
+		const beneath = elementsBeneath(top);
+		assert.equal(beneath.length, 4);
+		assert.deepEqual(beneath.map((element) => scene.itemOf(element).path), [[0, 0], [0, 0, 0], [0, 0, 1], [0, 0, 1, 0]]);
+		takeAway();
+		for (const element of beneath) assert.equal(scene.itemOf(element), null, `${element.tag} ${element.serial}`);
+	}
 });
 
 test("I7: an element keeps its answer while it is kept, and answers null once the scene removed it -- by remove, by a replacement, by a shorter list, by text in place of children", () => {
