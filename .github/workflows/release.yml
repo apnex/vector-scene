@@ -98,7 +98,13 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" \
             --notes "@apnex/vector-scene ${TAG#v}. Name this release's tarball in package.json (README.md, Install); its SHA-512 is attached beside it." \
             "$RUNNER_TEMP/packed/$FILE" "$RUNNER_TEMP/packed/$FILE.sha512"
-          ids=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id")
+          # the list of releases can lag the create by a few seconds, so the lookup is retried, bounded
+          ids=""
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            ids=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id")
+            [ -n "$ids" ] && break
+            sleep 5
+          done
           if [ -z "$ids" ] || [ "$(printf '%s\n' "$ids" | wc -l)" != 1 ]; then
             echo "expected one draft release of $TAG, found: $ids"
             exit 1
