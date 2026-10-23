@@ -15,6 +15,11 @@
  * new order, and removing each old attribute the new lacks, in the old order; then its content, by the four
  * cases VS7 step 4 names. Every element made is answered by an element record, held in a WeakMap by the
  * element's identity alone, so which item an element belongs to is answered without reading the element.
+ *
+ * Each of VS1's methods of an element is read as it is called, and judged: an element the root's document
+ * made that holds no function by that name, or that refuses its text, is a platform failure, the scene's own
+ * Error beginning with the function's name, as an answer of createElementNS that is no object is -- never
+ * the engine's TypeError, which would read as a malformed argument.
  */
 import type { Spec } from "./shape-reading.js";
 import type { PlatformMethod } from "./declaration-reading.js";
@@ -44,6 +49,34 @@ export interface ElementRecord {
 /** Where a new element at a position past the old list's end goes: before an element, or appended to its parent. */
 type Append = (element: SceneElement) => void;
 
+/** VS1's calls on an element the root's document made, each method read as it is called and judged before it is called. */
+export interface ElementCalls {
+	setAttribute(element: SceneElement, name: string, value: string): void;
+	removeAttribute(element: SceneElement, name: string): void;
+	appendChild(element: SceneElement, child: SceneElement): void;
+	insertBefore(element: SceneElement, child: SceneElement, before: SceneElement | null): void;
+	remove(element: SceneElement): void;
+	writeText(element: SceneElement, text: string): void;
+}
+
+/** VS1's calls on elements, a failure named for the function `fn` answers: an element holding no such function, or refusing its text, throws Error. */
+export function elementCalls(fn: () => string): ElementCalls {
+	const judged = (method: unknown, name: string): ((...args: unknown[]) => unknown) => {
+		if (typeof method !== "function") throw new Error(`${fn()}: an element the root's document made holds no function ${name}`);
+		return method as (...args: unknown[]) => unknown;
+	};
+	return {
+		setAttribute: (element, name, value) => void Reflect.apply(judged(element.setAttribute, "setAttribute"), element, [name, value]),
+		removeAttribute: (element, name) => void Reflect.apply(judged(element.removeAttribute, "removeAttribute"), element, [name]),
+		appendChild: (element, child) => void Reflect.apply(judged(element.appendChild, "appendChild"), element, [child]),
+		insertBefore: (element, child, before) => void Reflect.apply(judged(element.insertBefore, "insertBefore"), element, [child, before]),
+		remove: (element) => void Reflect.apply(judged(element.remove, "remove"), element, []),
+		writeText: (element, text) => {
+			if (!Reflect.set(element, "textContent", text)) throw new Error(`${fn()}: an element the root's document made refused its textContent`);
+		},
+	};
+}
+
 /** Makes and patches elements for one scene, through the root's document's createElementNS read as the scene opened. */
 export interface ElementWriter {
 	/** Makes a shape's element and its children's, depth first, registering each; does not insert it. */
@@ -59,6 +92,7 @@ export interface ElementWriter {
 /** VS7 and VS9: the element writer of one scene. `fn` names the function whose writing a refusal reports. */
 export function elementWriter(rootDocument: object, createElementNS: PlatformMethod, fn: () => string): ElementWriter {
 	const owner = new WeakMap<object, ElementRecord>();
+	const calls = elementCalls(fn);
 
 	const forget = (record: ElementRecord): void => {
 		owner.delete(record.element);
@@ -75,8 +109,8 @@ export function elementWriter(rootDocument: object, createElementNS: PlatformMet
 		const element = create(spec.tag);
 		const record: ElementRecord = { element, parent, index, holder, kids: [] };
 		owner.set(element, record);
-		for (const [name, written] of spec.attrs) element.setAttribute(name, written);
-		if (spec.text !== "") element.textContent = spec.text;
+		for (const [name, written] of spec.attrs) calls.setAttribute(element, name, written);
+		if (spec.text !== "") calls.writeText(element, spec.text);
 		appendKids(record, spec.kids);
 		return record;
 	};
@@ -86,39 +120,39 @@ export function elementWriter(rootDocument: object, createElementNS: PlatformMet
 		kids.forEach((kid, index) => {
 			const made = make(kid, record, index, record.holder);
 			record.kids.push(made);
-			record.element.appendChild(made.element);
+			calls.appendChild(record.element, made.element);
 		});
 	};
 
 	const removeElement = (record: ElementRecord): void => {
-		record.element.remove();
+		calls.remove(record.element);
 		forget(record);
 	};
 
 	/** VS7 step 4: an element patched from its old shape to its new. */
 	const patch = (record: ElementRecord, old: Spec, now: Spec): void => {
 		const { element } = record;
-		for (const [name, written] of now.attrs) if (old.attrMap.get(name) !== written) element.setAttribute(name, written);
-		for (const [name] of old.attrs) if (!now.attrMap.has(name)) element.removeAttribute(name);
+		for (const [name, written] of now.attrs) if (old.attrMap.get(name) !== written) calls.setAttribute(element, name, written);
+		for (const [name] of old.attrs) if (!now.attrMap.has(name)) calls.removeAttribute(element, name);
 		const hadKids = old.kids.length > 0;
 		const hasKids = now.kids.length > 0;
 		if (!hadKids && !hasKids) {
 			// text to text: the new text written when it differs, "" among them
-			if (old.text !== now.text) element.textContent = now.text;
+			if (old.text !== now.text) calls.writeText(element, now.text);
 		} else if (!hadKids) {
 			// text to children: "" written when the old text was not, then each child made and appended
-			if (old.text !== "") element.textContent = "";
+			if (old.text !== "") calls.writeText(element, "");
 			record.kids = [];
 			appendKids(record, now.kids);
 		} else if (!hasKids) {
 			// children to text or to none: each old child removed, in order, then the new text written when there is one
 			for (const kid of record.kids) removeElement(kid);
 			record.kids = [];
-			if (now.text !== "") element.textContent = now.text;
+			if (now.text !== "") calls.writeText(element, now.text);
 		} else {
 			// children to children: the lists compared as VS7 step 3 compares them
 			record.kids = reconcile(record.kids, old.kids, now.kids, record, record.holder, element, (made) => {
-				element.appendChild(made);
+				calls.appendChild(element, made);
 			});
 		}
 	};
@@ -138,7 +172,7 @@ export function elementWriter(rootDocument: object, createElementNS: PlatformMet
 			}
 			if (now !== undefined) {
 				const made = make(now, parent, index, holder);
-				if (record !== undefined) container.insertBefore(made.element, record.element);
+				if (record !== undefined) calls.insertBefore(container, made.element, record.element);
 				else append(made.element);
 				kept.push(made);
 			}

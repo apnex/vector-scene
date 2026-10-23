@@ -145,6 +145,64 @@ test("Errors: a platform method's error propagates unchanged -- while the scene 
 	assert.throws(() => closing.scene.close(), (e) => e === thrown);
 });
 
+/** A fake root whose document's createElementNS answers what `answer(made, tag)` makes of each element it would make, as `mode` says at the time. */
+function rootWhoseElements(answer) {
+	const platform = fakeRoot();
+	const make = platform.root.ownerDocument.createElementNS;
+	platform.root.ownerDocument.createElementNS = (namespace, tag) => answer(make(namespace, tag), tag);
+	return platform;
+}
+const isPlatformFailure = (fn, method) => (e) => Object.getPrototypeOf(e) === Error.prototype && e.message.startsWith(`${fn}: `) && e.message.includes(method);
+
+test("Errors: an element the root's document made that holds no element method, or refuses its text, is a platform failure -- an Error beginning with the function's name, the scene failed -- never the engine's TypeError", () => {
+	// an object with no element method at all, answered once the scene is open: put fails the scene
+	let broken = false;
+	const bare = rootWhoseElements((made) => (broken ? {} : made));
+	const scene = openScene({ root: bare.root, layers: LAYERS }).scene;
+	broken = true;
+	assert.throws(() => scene.put("items", "a", [{ tag: "g", attrs: { x: 1 } }]), isPlatformFailure("put", "setAttribute"));
+	assert.throws(() => scene.items("items"), isBaseError("items"), "the scene is failed");
+	assert.equal(scene.close(), undefined, "close is left, and removes the layers");
+	assert.deepEqual(bare.root.children, []);
+	// one method missing at a time, each met where VS7 calls it
+	const missing = [
+		["removeAttribute", (s) => s.put("items", "a", [{ tag: "rect" }]), "put"],
+		["appendChild", (s) => s.put("items", "a", [{ tag: "rect", children: [{ tag: "rect" }] }]), "put"],
+		["insertBefore", (s) => {
+			s.put("items", "a", [{ tag: "rect", children: [{ tag: "circle" }] }]);
+			s.put("items", "a", [{ tag: "rect", children: [{ tag: "path" }] }]);
+		}, "put"],
+		["remove", (s) => s.remove("items", "a"), "remove"],
+	];
+	for (const [method, call, fn] of missing) {
+		const platform = rootWhoseElements((made, tag) => {
+			if (tag === "rect") delete made[method];
+			return made;
+		});
+		const opened = openScene({ root: platform.root, layers: LAYERS }).scene;
+		opened.put("items", "a", [{ tag: "rect", attrs: { y: 1 } }]);
+		assert.throws(() => call(opened), isPlatformFailure(fn, method), method);
+		assert.throws(() => opened.items("items"), isBaseError("items"), `${method}: failed`);
+	}
+	// an element whose textContent cannot be written
+	const unwritable = rootWhoseElements((made, tag) => (tag === "text" ? Object.defineProperty(made, "textContent", { value: "", writable: false }) : made));
+	const texts = openScene({ root: unwritable.root, layers: LAYERS }).scene;
+	assert.throws(() => texts.put("items", "a", [{ tag: "text", text: "hi" }]), isPlatformFailure("put", "textContent"));
+	assert.throws(() => texts.items("items"), isBaseError("items"));
+	// a layer that cannot take its attributes: openScene takes back what it made and throws the Error
+	const opening = rootWhoseElements(() => ({}));
+	assert.throws(() => openScene({ root: opening.root, layers: [{ name: "a", attrs: { id: "a" } }] }), isPlatformFailure("openScene", "setAttribute"));
+	assert.deepEqual(opening.root.children, []);
+	// a layer that cannot be removed: close attempts every removal, then throws the first Error
+	const layers = rootWhoseElements((made) => {
+		if (made.serial === 2) delete made.remove;
+		return made;
+	});
+	const closing = openScene({ root: layers.root, layers: LAYERS }).scene;
+	assert.throws(() => closing.close(), isPlatformFailure("close", "remove"));
+	assert.deepEqual(layers.root.children.map((child) => child.serial), [2], "every other layer removed");
+});
+
 test("What is returned: every value the scene makes is made afresh by the call that first returns it and frozen to its depth", () => {
 	const { scene, items } = rooted();
 	const opened = openScene({ layers: LAYERS });

@@ -17,7 +17,7 @@
 import { isObject, malformed, readRecordArgument } from "./argument-reading.js";
 import { convertPoint, readPoint } from "./conversion.js";
 import { judgeDeclaration } from "./declaration-reading.js";
-import { elementWriter, SVG_NAMESPACE, type ElementRecord, type ElementWriter, type ItemRecord } from "./scene-writing.js";
+import { elementCalls, elementWriter, SVG_NAMESPACE, type ElementRecord, type ElementWriter, type ItemRecord } from "./scene-writing.js";
 import { frozenAttributes, readShapes } from "./shape-reading.js";
 import type { ElementSlice, OpenSceneResult, Scene, SceneDeclaration, SceneElement, SceneItem, SceneLayer, ScenePoint, ShapeAtElement } from "./types.js";
 
@@ -51,6 +51,7 @@ function openSceneOver(declaration: unknown): OpenSceneResult {
 	// the lifecycle's rules 1 and 2: each layer's <g> made, its attributes set, and appended; on a throw, every one taken back
 	const layerElements = new Map<string, SceneElement>();
 	const made: SceneElement[] = [];
+	const opening = elementCalls(() => "openScene");
 	if (platform !== null) {
 		for (const layer of judged.layers) {
 			let inProgress: SceneElement | null = null;
@@ -58,13 +59,13 @@ function openSceneOver(declaration: unknown): OpenSceneResult {
 				const element: unknown = Reflect.apply(platform.createElementNS, platform.rootDocument, [SVG_NAMESPACE, "g"]);
 				if (!isObject(element)) throw new Error("openScene: the root's document's createElementNS answered no element");
 				inProgress = element as SceneElement;
-				for (const [name, written] of layer.attrs) inProgress.setAttribute(name, written);
+				for (const [name, written] of layer.attrs) opening.setAttribute(inProgress, name, written);
 				Reflect.apply(platform.appendChild, platform.root, [inProgress]);
 			} catch (error) {
 				const takeBack = inProgress === null ? [...made].reverse() : [inProgress, ...[...made].reverse()];
 				for (const element of takeBack) {
 					try {
-						element.remove();
+						opening.remove(element);
 					} catch {
 						// every removal is attempted; the error thrown is the one first thrown
 					}
@@ -80,6 +81,8 @@ function openSceneOver(declaration: unknown): OpenSceneResult {
 	let writing = false;
 	let writingFor = "";
 	const writer: ElementWriter | null = platform === null ? null : elementWriter(platform.rootDocument, platform.createElementNS, () => writingFor);
+	const placing = elementCalls(() => writingFor);
+	const closing = elementCalls(() => "close");
 
 	/** The scene's state, judged once a function's arguments are read: closed, failed, or writing refuses the call. */
 	const judgeState = (fn: string): void => {
@@ -123,8 +126,8 @@ function openSceneOver(declaration: unknown): OpenSceneResult {
 
 	/** Inserts an element before another in a layer, or appends it to the layer. */
 	const place = (layer: SceneElement, element: SceneElement, before: SceneElement | null): void => {
-		if (before === null) layer.appendChild(element);
-		else layer.insertBefore(element, before);
+		if (before === null) placing.appendChild(layer, element);
+		else placing.insertBefore(layer, element, before);
 	};
 
 	/** VS6 and VS7: makes `shapes` the description of the item `key` in `layer`. */
@@ -257,7 +260,7 @@ function openSceneOver(declaration: unknown): OpenSceneResult {
 		let first: unknown;
 		for (const element of [...made].reverse()) {
 			try {
-				element.remove();
+				closing.remove(element);
 			} catch (error) {
 				if (!failed) {
 					failed = true;
