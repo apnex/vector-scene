@@ -1,0 +1,7 @@
+{
+  "about": "One list per consumer of vector-scene: words of its vocabulary that vector-scene's source must not hold (SNAP-GRID.md section 7.2, both lists, as VECTOR-SCENE.md section 7 runs them). Test data: never in src/, never in a release.",
+  "lists": {
+    "draw": ["node", "link", "zone", "pipe", "waypoint", "device", "diagram", "anchor", "glyph", "spawner", "transit", "layout", "junction", "drawv2"],
+    "gesture-tester": ["keyboard", "keycap"]
+  }
+}
