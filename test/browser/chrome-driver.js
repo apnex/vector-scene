@@ -13,7 +13,8 @@
 // with it, which outlive a kill of the main process alone and go on writing to the profile -- and the wait
 // for the group to end is bounded. The profile is removed with retries, and a profile that still cannot be
 // removed is a warning on stderr, never a failure: a leftover scratch directory is no fault of the
-// component. The static server is unreferenced and its connections closed, the socket closed, each in a
+// component. So is the directory Chrome makes beside it in the scratch directory for its singleton socket,
+// which a killed Chrome never removes, found by the link the profile holds to it. The static server is unreferenced and its connections closed, the socket closed, each in a
 // finally, so no cleanup error leaves a handle holding the process open.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -113,18 +114,37 @@ export function removeProfile(profile, warn = warnOnStderr) {
 	}
 }
 
+/**
+ * Removes the directory Chrome made in the scratch directory for its singleton socket, named by the link
+ * `SingletonSocket` in its profile -- only a directory directly in os.tmpdir() whose name is Chrome's
+ * `.com.google.Chrome.` and six characters -- since a Chrome killed whole never removes it. A profile with no
+ * such link removes nothing; a directory that cannot be removed is a warning, never a failure. Answers the
+ * directory removed, or null.
+ */
+export function removeSingleton(profile, warn = warnOnStderr) {
+	let dir;
+	try {
+		dir = path.dirname(fs.readlinkSync(path.join(profile, "SingletonSocket")));
+	} catch {
+		return null;
+	}
+	if (path.dirname(dir) !== path.resolve(os.tmpdir()) || !/^\.com\.google\.Chrome\.[A-Za-z0-9]{6}$/.test(path.basename(dir))) return null;
+	return removeProfile(dir, warn) ? dir : null;
+}
+
 /** Launches headless Chrome with a profile and a debugging port of its own, and connects to its first page. */
 export async function launchChrome() {
 	const profile = fs.mkdtempSync(path.join(os.tmpdir(), "vector-scene-i10-"));
 	const chrome = launchGroup(process.env.CHROME || "google-chrome", ["--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--window-size=800,600", `--user-data-dir=${profile}`, "--remote-debugging-port=0", "about:blank"]);
 	let stopped = false;
-	/** Ends Chrome's whole process group, then removes its profile; idempotent, and never throws. */
+	/** Ends Chrome's whole process group, then removes its singleton socket's directory and its profile; idempotent, and never throws. */
 	const stop = async () => {
 		if (stopped) return;
 		stopped = true;
 		try {
 			await chrome.stop();
 		} finally {
+			removeSingleton(profile);
 			removeProfile(profile);
 		}
 	};
