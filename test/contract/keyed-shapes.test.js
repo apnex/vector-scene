@@ -150,6 +150,12 @@ test("I5: a shape is read -- prototype, own keys, the four descriptors held, the
 	const both = [];
 	refusedPut(() => scene.put("items", "k", [recorded({ tag: "g", attrs: recorded({ x: 1 }, "attrs", both), text: "", children: [] }, "shape", both)]), "both");
 	assert.deepEqual(both, ["shape getPrototypeOf", "shape ownKeys", "shape getOwnPropertyDescriptor tag", "shape getOwnPropertyDescriptor attrs", "shape getOwnPropertyDescriptor text", "shape getOwnPropertyDescriptor children"], "refused before attrs is read");
+	const stray = [];
+	refusedPut(() => scene.put("items", "k", recorded(Object.assign([{ tag: "g" }], { extra: 1 }), "shapes", stray)), "an array holding a stray key");
+	assert.deepEqual(stray, ["shapes getPrototypeOf", "shapes ownKeys"], "a stray key refuses at the own keys, before length's descriptor");
+	const sparse = [];
+	refusedPut(() => scene.put("items", "k", recorded([{ tag: "g" }, , { tag: "g" }], "shapes", sparse)), "a sparse array"); // eslint-disable-line no-sparse-arrays
+	assert.deepEqual(sparse, ["shapes getPrototypeOf", "shapes ownKeys", "shapes getOwnPropertyDescriptor length"], "a sparse array refuses right after length's descriptor, before any index's");
 	const unknown = [];
 	refusedPut(() => scene.put("items", "k", [recorded({ tag: "g", extra: 1 }, "shape", unknown)]), "an unknown key");
 	assert.deepEqual(unknown, ["shape getPrototypeOf", "shape ownKeys"], "an unknown key refuses at the own keys, no descriptor read");
@@ -308,6 +314,17 @@ test("VS7 step 4: a kept element's attributes -- each new one that differs or is
 	assert.deepEqual(log, [], "5 written as \"5\" is no change");
 	scene.put("items", "a", [{ tag: "rect", attrs: { x: -0 } }]);
 	assert.equal(rect.attributes.get("x"), "0");
+});
+
+test("VS7 step 4: old attributes are removed in the old description's order, not the order the platform holds them in", () => {
+	const { scene, items, log } = rooted();
+	scene.put("items", "a", [{ tag: "rect", attrs: { x: "1", y: "1" } }]);
+	scene.put("items", "a", [{ tag: "rect", attrs: { y: "1", x: "1", z: "1" } }]);
+	const rect = items.children[0];
+	assert.deepEqual([...rect.attributes.keys()], ["x", "y", "z"], "the platform holds x, y, then z added last");
+	log.length = 0;
+	scene.put("items", "a", [{ tag: "rect" }]);
+	assert.deepEqual(log, [["unset", rect.serial, "y"], ["unset", rect.serial, "x"], ["unset", rect.serial, "z"]], "the old description's order: y, x, z");
 });
 
 test("VS7 step 4: content -- text to text, text to children, children to text or none, children to children", () => {

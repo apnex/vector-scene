@@ -208,6 +208,12 @@ test("VS2 rule 2: a declaration is read breadth first -- its descriptors, the ro
 	});
 	assert.deepEqual(problemsOf({ layers: [refusedLayer, { name: 5 }] }), ["not-an-object /layers/0", "invalid-value /layers/1/name"]);
 	assert.deepEqual(second, ["layer getPrototypeOf", "layer ownKeys"], "nothing beneath a layer refused at its pointer is read; its sibling is");
+	const stray = [];
+	assert.deepEqual(problemsOf({ layers: recorded(Object.assign([{ name: "a" }], { extra: 1 }), "layers", stray) }), ["invalid-value /layers"]);
+	assert.deepEqual(stray, ["layers getPrototypeOf", "layers ownKeys"], "a stray key refuses at the own keys, before length's descriptor");
+	const sparse = [];
+	assert.deepEqual(problemsOf({ layers: recorded([{ name: "a" }, , { name: "b" }], "layers", sparse) }), ["invalid-value /layers"]); // eslint-disable-line no-sparse-arrays
+	assert.deepEqual(sparse, ["layers getPrototypeOf", "layers ownKeys", "layers getOwnPropertyDescriptor length"], "a sparse array refuses right after length's descriptor, before any index's");
 });
 
 test("VS3 lifecycle rule 1, VS4: with a root, each layer's <g> is made, its attributes set in order, and appended after what the root holds; layers is a frozen copy", () => {
@@ -230,6 +236,8 @@ test("VS3 lifecycle rule 1, VS4: with a root, each layer's <g> is made, its attr
 	assert.equal(scene.layers[0].attrs.id, "back", "nothing the application passes is kept");
 	assert.equal(scene.layers.length, 3);
 	assert.equal(scene.layerElement("free"), root.children[3]);
+	const written = openScene({ layers: [{ name: "a", attrs: { n: 2, z: -0, s: "x" } }, { name: "b" }, { name: "c", foreign: true }] }).scene.layers;
+	assert.equal(JSON.stringify(written), '[{"name":"a","attrs":{"n":"2","z":"0","s":"x"},"foreign":false},{"name":"b","attrs":{},"foreign":false},{"name":"c","attrs":{},"foreign":true}]', "a layer's attrs as VS5 writes them, {} when none were declared, foreign false when absent");
 	for (const name of ["back", "items", "nothing", 5, null, undefined]) assert.throws(() => scene.layerElement(name), (e) => e.constructor === TypeError && e.message.startsWith("layerElement: "), String(name));
 	for (const fn of ["items", "put", "remove"]) assert.throws(() => scene[fn]("free", "k", [{ tag: "g" }]), (e) => e.constructor === TypeError && e.message.startsWith(`${fn}: `), `${fn} refuses a foreign layer`);
 	for (const fn of ["items", "put", "remove"]) assert.throws(() => scene[fn]("nothing", "k", [{ tag: "g" }]), (e) => e.constructor === TypeError && e.message.startsWith(`${fn}: `), `${fn} refuses an undeclared layer`);
