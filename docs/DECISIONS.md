@@ -1,0 +1,75 @@
+# Decisions
+
+One ruling per entry, append-only.\
+A ruling is never edited; a later one supersedes it and says so.
+
+Rulings that shape this component together with its first consumer are held in draw's `dev/DECISIONS.md` (`apnex/drawv2`), and cited here as "draw's `Hn-m`".
+
+---
+
+## D1 - The component stands in its own public repository
+
+**Ruled by:** the director, 2026-10-20 (draw's `H26-1` and `H26-2`), and 2026-10-23 (draw's `H26-11`, the design's D11).\
+**Affects:** this repository, its package and its releases.
+
+**Ruling.**\
+vector-scene is a component of its own, in the public repository `apnex/vector-scene`, its package `@apnex/vector-scene`, released from its own CI as `0.1.0`, its one export path `.`, and taken by draw as a release file pinned by its hash.\
+Its versions are `0.x` until mission-kit admits it to the component registry.
+
+**Why.**\
+Each component holds its own boundary and its own history from the start, so a consumer composes it through a declared contract rather than a copy, and a second consumer can adopt it without a fork.
+
+---
+
+## D2 - The contract of record is draw's ratified design
+
+**Ruled by:** the director, 2026-10-23 (draw's `H26-11`).\
+**Affects:** `CONTRACT.md`, `VISION.md`, `src/`, `test/`, `tools/` and `.github/workflows/`.
+
+**Ruling.**\
+The contract of record is section 3 of draw's `dev/design/components/VECTOR-SCENE.md`, revision 3, ratified with all thirteen of its decisions as recommended, D1, D6 and D8 as the director answered them; `CONTRACT.md` carries it, its section 4 holds the invariants and tests, and its section 7 states where this repository differs from the shared parts `snap-grid` settled and `input-binding` and `input-capture` built again.\
+`VISION.md` is that design's appendix A, ratified as written.\
+Its sections 5 and 6 and appendix B are draw's move onto the component, made in draw, not here.
+
+**Choices made at build.**\
+Where section 3 was silent or left a choice open, the build made these; each that a test can hold is held by one, and each that a consumer can observe is stated here:
+- The TypeScript declarations are generic in `E`, the kind of element the root's document makes: `ElementSlice<E>` states what VS1 touches of an element, `SceneElement` is the slice over its own kind, and `SceneRoot<E>`, `SceneDocument<E>`, `SceneDeclaration<E>`, `Scene<E>` and `OpenSceneResult<E>` carry it, each defaulting to `SceneElement`. A structural type of the scene's own cannot be what a browser's `appendChild` takes -- it takes the platform's own kind of object -- so a browser's `<svg>` was not assignable to a slice whose elements were of one fixed type; carried through, a browser's root makes `E` its `Element`, and `layerElement` answers the platform's own element, drawn beneath with the platform's own types. The members that take an element are function-typed properties, not methods, so `E` is inferred from what `createElementNS` answers: a method's parameters are compared both ways, so TypeScript inferred from a browser's `appendChild` too and widened `E` past `Element`.
+- What a put keeps of its shapes is a tree of its own, from which its frozen description is made, so the scene compares, writes and answers from these and never reads the application's values again. A description's attribute record is made by defining each attribute, never assigning it, so a name such as `__proto__` is an own property like any other, and the record's prototype is `Object.prototype`.
+- Putting the scene's own description again makes a new frozen copy of it, equal and not identical, since a description is "made when the item is put"; it calls nothing on the platform.
+- A `createElementNS` answering a value that is not an object is a platform failure: it throws `Error` beginning with the function's name -- `openScene: `, `put: ` -- inside a put it fails the scene as a throw would, and while the scene opens it takes back the layers made, as lifecycle rule 2 says.
+- The scene writes only during the platform calls of one put or removal; a scene with no root makes none, so it is never writing, and nothing re-enters it there.
+- `put` reads its layer, its key, its shapes and its place, then judges the scene's state, then looks for the item `before` names, which throws `Error` when the layer holds none, and only then writes. `place` passed as `undefined` is the same as no `place`; `null` is malformed, as any value that is no plain object is.
+- `remove` of a key the layer does not hold judges the scene's state first, so it throws `Error` on a closed or failed scene, and otherwise calls nothing.
+- `itemOf` judges its value by `typeof` -- an object or a function can be an element -- then the scene's state, then looks the value up by identity in a `WeakMap` from each element made to its item and path; a `Proxy` of an element is not that element, and none of its traps runs.
+- `layerElement` judges its name -- a foreign layer's, or the `TypeError` -- then the scene's state, then whether there is a root, the `Error` when there is none.
+- `close` on a closed scene answers `undefined` before anything else, so a `close` made from inside a removal, the scene being closed already, calls nothing; on a failed scene it removes the layers like any other first call.
+- A layer's `attrs` present as `undefined` is `not-an-object` at `/layers/<i>/attrs`, as any value that is no plain object is.
+- The problems are ordered by pointer by UTF-16 code unit, so `/layers/10/name` comes before `/layers/2/name`, and `/layers/0/nam` before `/layers/0/name`.
+- The runtime check (`tools/check-runtime.mjs`) gains a platform-member pass: every member TypeScript's own `lib.dom.d.ts` declares on `Document`, `XMLDocument`, `DOMMatrix`, `DOMMatrixReadOnly` and every SVG element interface, and on every interface they extend -- 98 interfaces and 700 member names, as TypeScript 5.9.3 declares them -- is a platform member, and a built file may name only VS1's slice among them, and `x` and `y`, which the scene reads of a point and an SVG element also holds. A member named by dot, by brackets with a string literal, in a destructuring pattern, on the left of `in`, or as the literal key of a `Reflect` call is found; a member reached by a computed key is beyond any static check, and the recording test (I3) holds what the scene touches at run time. Falsifiers and controls are in `test/tools/gate-checks.test.js`, `getAttribute`, `childNodes` and `getBoundingClientRect` among them.
+- The runtime check refuses an identifier named `document` anywhere but as a member's name, so the source names the root's document `rootDocument`.
+- The I3 recording test is in `test/contract/keyed-shapes.test.js`, as section 4 lists I3 there; its platform is `test/support/recording-platform.js`, a root, a document, the elements it makes and the transforms it answers, each a `Proxy` that logs every trap and each method logging its call into one log, a value named there by a label looked up by identity, so the log reads nothing of what it names. Calling an element's method reads that method, so the log holds `<element> get appendChild` before each call; it holds no other read of a made element.
+- I4's model of VS7 is `test/support/vs7-model.js`, written from VS7's text and importing nothing of `src/`; the generated sequences are `test/support/generate.js`, a seeded xorshift128+ source whose seed `VECTOR_SCENE_SEED` changes, run as 60 sequences of 60 calls over two scene layers, beside a scene with no root (I6); the fake platform is `test/support/fake-dom.js`, its `appendChild` and `insertBefore` detaching a child they move, its `setAttribute` keeping an attribute's place and adding a new one last, its `textContent` replacing the children.
+- I11's consumer is `test/types/scene-consumer.mts`; beyond compiling it, `test/contract/public-types.test.js` compiles it again with every `@ts-expect-error` directive taken out, in a scratch project that links the package, and finds each expected error on its own line and no other line failing, so no expected error passes for a reason not its own.
+- I10's root lies 40 pixels right and 20 down its page, 437 by 300 pixels showing a `viewBox` of 200 by 100 units, so it is scaled by 2.185 and letterboxed 40.75 pixels down, and its screen transform is no identity. The page runs the generator the Node.js tests use, which the test's static server answers from `test/support/`, and checks every scene layer after each of 600 calls, an element first met since the last call holding its attributes in description order. The transition runs on a `style` attribute patched from one opacity to another, then a sibling item is inserted before its item, another put after it, and its own item patched again; the transition is the same object, still running. The presses are dispatched through the DevTools protocol's `Input` domain at the centres of the targets' boxes; the conversions compare 3,000 points each way against `DOMPoint`, special values `-0` and extremes among them, at two widths of the root, and where `DOMPoint` answers a number that is not finite, the scene's answer is the `Error`.
+- The consumer test's exercise opens a scene with no root in Node.js and on an `<svg>` element in the page, as section 7 says; in the page it finds the element made by its id, asks `itemOf` of its child, compares `toDrawing` with `DOMPoint` over the element's own screen transform, and finds the root as it was after `close`.
+- Beyond the four capability files the design's section 4 names, `test/contract/` holds `returned-values-and-errors.test.js`, `public-types.test.js`, `public-surface.test.js` and `contract-coverage.test.js`.
+- `CONTRACT.md` carries section 3 with the design's section and decision references written "the design's", each rule followed by the tests that hold it, section 4's invariants, and section 3.5's Reference under its own heading, as SC6 orders the six.
+- The vocabulary lists are `snap-grid`'s, both of them, unchanged; no word of either is needed, so no allowance is asked. Section 7's traps are held by `test/tools/gate-checks.test.js`.
+- `tools/measure-size.mjs` measures the built size, every built module being loaded together through the one export path.
+
+**Errata to raise against draw's design** (`VECTOR-SCENE.md`, for its section 10):
+1. VS11 says the declarations state the slice as structural types "so a browser's `<svg>` element is assignable as a root"; no structural type of one fixed element kind achieves it, since a browser's `appendChild` takes only its own kind of object. The sentence should say the slice is generic in the kind of element the root's document makes, as the first choice above records.
+2. I3 says the log holds "no read of a made element", and VS7 that a put "reads nothing of the platform"; calling an element's method reads that method. The sentences should say: no read of a made element but of the methods VS1 calls on it.
+
+**Built size.**\
+Measured by `tools/measure-size.mjs` over `dist/` as built, as the design's section 7 asks: every built module is loaded wherever `openScene` is imported.\
+Bytes as shipped, comments included, then with comments removed, each also gzipped at level 9:
+
+| Files | Bytes | Gzip | No comments | Gzip |
+|---|---|---|---|---|
+| `open-scene.js` | 13,594 | 3,716 | 10,308 | 2,541 |
+| `shape-reading.js` | 7,669 | 2,522 | 5,194 | 1,652 |
+| `declaration-reading.js` | 7,556 | 2,103 | 5,415 | 1,325 |
+| `reflection.js` | 5,569 | 1,853 | 3,113 | 931 |
+| `argument-reading.js`, `scene-writing.js`, `conversion.js`, `declaration-problems.js`, `index.js`, `types.js` | 14,892 | 5,540 | 9,354 | 3,114 |
+| every built module | 49,280 | 15,734 | 33,384 | 9,563 |
