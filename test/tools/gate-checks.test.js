@@ -320,6 +320,20 @@ test("I12: the source check fails on `declare const window: any;` and `/// <refe
 	}
 });
 
+test("I12: the source check finds a triple-slash directive's form after a template literal with a substitution, and at the end of a source file that holds one", () => {
+	// a bare scanner reads a template's text after its first substitution as code, so the comments after it went unseen
+	assert.ok(findSourceProblems('export const a = `${1}`;\n/// <reference lib="dom" />\n').some((f) => f.line === 2 && f.finding.includes("triple-slash")));
+	assert.ok(findSourceProblems('export function f(n: number) {\n\tconst t = `${n}`;\n\t/// <reference types="web" />\n\treturn t;\n}\n').some((f) => f.line === 3));
+	assert.deepEqual(findSourceProblems("export const a = `${1}\n/// <reference lib=\"dom\" />\n`;\n"), [], "the form inside a template's text is no comment");
+	assert.deepEqual(findSourceProblems("/// no directive here\nexport {};\n"), [], "a triple-slash comment of no directive's form passes");
+	const { problems, run: r } = sourceCheckOf((dir) => {
+		const file = path.join(dir, "src", "conversion.ts");
+		fs.writeFileSync(file, `${fs.readFileSync(file, "utf8")}/// <reference lib="dom" />\n`);
+	});
+	assert.equal(r.status, 1);
+	assert.ok(problems.some((p) => /^src\/conversion\.ts:\d+: holds a comment of a triple-slash directive's form$/.test(p)), problems.join("; "));
+});
+
 test("I12: the source check fails on every triple-slash directive, a declaration file, and a file that is no ES module", () => {
 	for (const text of ['/// <reference lib="dom" />\nexport {};\n', '/// <reference types="web" />\nexport {};\n', '/// <reference path="./x.d.ts" />\nexport {};\n', '/// <reference no-default-lib="true" />\nexport {};\n', 'export const a = 1;\n/// <reference lib="dom" />\n']) {
 		assert.ok(findSourceProblems(text).some((f) => f.finding.includes("triple-slash")), text);

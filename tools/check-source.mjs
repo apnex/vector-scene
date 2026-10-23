@@ -66,10 +66,18 @@ export function findSourceProblems(source, fileName = "source.ts") {
 	for (const ref of file.typeReferenceDirectives) found.push({ line: lineAt(ref.pos), finding: `holds a triple-slash reference to the types "${ref.fileName}"` });
 	for (const ref of file.libReferenceDirectives) found.push({ line: lineAt(ref.pos), finding: `holds a triple-slash reference to the lib "${ref.fileName}"` });
 	if (file.hasNoDefaultLib) found.push({ line: 1, finding: "holds a triple-slash no-default-lib directive" });
-	const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, source);
-	for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
-		if (token === ts.SyntaxKind.SingleLineCommentTrivia && /^\/\/\/\s*</.test(scanner.getTokenText())) {
-			const line = lineAt(scanner.getTokenStart());
+	// every comment is found from the parsed tree -- the leading and trailing comment ranges of each token, the
+	// end-of-file token's among them -- since a bare scanner reads a template literal's text after its first
+	// substitution as code, and would miss a comment anywhere after it
+	const comments = new Map();
+	const collect = (node) => {
+		for (const range of [...(ts.getLeadingCommentRanges(source, node.pos) ?? []), ...(ts.getTrailingCommentRanges(source, node.end) ?? [])]) comments.set(range.pos, range);
+		for (const child of node.getChildren(file)) collect(child);
+	};
+	collect(file);
+	for (const range of comments.values()) {
+		if (range.kind === ts.SyntaxKind.SingleLineCommentTrivia && /^\/\/\/\s*</.test(source.slice(range.pos, range.end))) {
+			const line = lineAt(range.pos);
 			if (!found.some((f) => f.line === line && f.finding.startsWith("holds a triple-slash"))) found.push({ line, finding: "holds a comment of a triple-slash directive's form" });
 		}
 	}
