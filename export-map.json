@@ -1,0 +1,11 @@
+{
+  "package": "@apnex/vector-scene",
+  "paths": {
+    ".": {
+      "exports": {
+        "openScene": { "part": "vector-scene", "serves": ["declared-scene", "keyed-shapes", "shape-at-element", "screen-conversion"] }
+      }
+    }
+  },
+  "deferred": {}
+}
