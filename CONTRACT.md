@@ -11,7 +11,7 @@ related: [C0, A3]
 
 # vector-scene
 
-The contract of record for vector-scene, made from section 3 of its design of record, ratified by the director as draw's ruling `H26-11` (`docs/DECISIONS.md` here, `D2`).\
+The contract of record for vector-scene `0.2.0`, each rule stated on its own terms; what was settled at each build is in `docs/DECISIONS.md` (`D2` for `0.1.0`, `D3` for `0.2.0`).\
 It also carries the fields of a mission-kit registry entry, and that entry is generated from this file when the component is filed, never written as a second copy.\
 The registry id is unminted on purpose; one is minted only when the entry is admitted to the registry.
 
@@ -23,7 +23,7 @@ Show an application's shapes, held as data in declared layers under its keys, ex
 
 That is the whole duty: one scene, kept equal to its description.\
 It does not decide what anything looks like or means, find a shape by geometry, read a clock, animate, style or sanitize -- each is the application's or another component's.\
-Panning and zooming the viewport, which draw's `H26-1` names in the duty, are held until their first consumer is designed (the design's D6).
+Panning and zooming a view of the scene are held until their first consumer is designed; the root itself, its `viewBox` among its attributes, is the application's (VS13).
 
 ---
 
@@ -45,9 +45,10 @@ These are the only nouns vector-scene's source uses for what it handles.
 | description | what the scene holds of an item: its shapes, as last put |
 | path | the indices from an item's first list of shapes down to one shape |
 | screen point | a point in the platform's screen units |
-| drawing coordinates | the coordinates the layers are drawn in: the root's own, while no view is declared (the design's D6) |
+| drawing coordinates | the coordinates the layers are drawn in: the root's own, since the scene holds no view of its own |
 | point | a frozen record of finite numbers `x` and `y` |
 | screen transform | the platform's affine map from the root's coordinates to the screen |
+| hit stack | the elements the platform's own hit test finds at a screen point, topmost first |
 
 **Capabilities.**\
 What a consumer can depend on, one capability per row.\
@@ -61,57 +62,59 @@ The trait column names any trait a system takes on by using the capability.
 | `declared-scene` | provides | none | A scene opened from declared layers, on a root or with none, or refused with every problem; closed by removing exactly what it added (VS2 to VS4). | stateful |
 | `keyed-shapes` | provides | none | Items of shapes put, replaced, moved and removed by key within a layer, the platform brought to show exactly the description, and the description read back as data that can be put again (VS5 to VS8). | stateful |
 | `shape-at-element` | provides | none | The item and path a platform element belongs to, or none -- so the platform's own hit test answers what lies under a point (VS9). | none |
+| `shape-at-point` | provides | none | The item and path of the first element in the platform's hit stack at a screen point that the scene made for an item it holds, or none -- by the platform's own hit test, so it answers under a captured pointer too (VS12). | none |
 | `screen-conversion` | provides | none | Where a screen point lies in drawing coordinates, and back, through the root's screen transform at the moment asked (VS10). | none |
 
 One capability per row; none requires another component's capability.\
-A scene writes its items, reads them back and is relied on to show them, so `declared-scene` and `keyed-shapes` are stateful in T1's sense (the design's section 9).
+A scene writes its items, reads them back and is relied on to show them, so `declared-scene` and `keyed-shapes` are stateful in T1's sense.
 
 **Errors.**\
 `openScene` never throws while it reads and judges a declaration: it refuses with problems; it throws only an error a platform method threw while it created the layers, after removing every layer it made (VS3).\
 Every other function reads and judges its arguments first, in VS2's order, and only then reads the scene's state; `close` takes none.\
 A malformed argument throws a `TypeError` whose message begins with the function's name and a colon -- `put: ` -- so a malformed argument to a closed scene meets the `TypeError`; an error a getter or a trap threw while an argument is read is rethrown as that `TypeError`, the thrown value named by its `typeof` alone: a primitive as `String` writes it, an object as "an object", a function as "a function".\
-A call the scene's state does not allow throws an `Error`, the base constructor, beginning with the function's name: any call but `close` on a closed or failed scene, any call, `close` among them, made while a put or a removal writes to the platform, a `before` naming no item of the layer, and a conversion or `layerElement` the root cannot answer (VS4, VS10).\
-An error a platform method throws propagates unchanged: thrown while the scene writes, it leaves the scene failed (VS7); thrown while it converts, it leaves the scene as it was.\
-A message's beginning is the contract and the rest is prose, as `input-binding` and `input-capture` settled.\
+A call the scene's state does not allow throws an `Error`, the base constructor, beginning with the function's name: any call but `close` on a closed or failed scene, any call, `close` among them, made while a put or a removal writes to the platform, a `before` naming no item of the layer, a conversion, `itemAt` or `layerElement` the root cannot answer, and an `itemAt` whose scene was closed or failed while the platform's answer was read (VS4, VS10, VS12).\
+An error a platform method throws propagates unchanged: thrown while the scene writes, it leaves the scene failed (VS7); thrown while it converts or asks the platform's hit test, an error a getter of the hit test's answer throws among them, it leaves the scene as it was (VS10, VS12).\
+A message's beginning is the contract and the rest is prose.\
 Tested by: `test/contract/returned-values-and-errors.test.js`, and each capability's own file.
 
 **What is returned.**\
-Every value the scene makes -- an open result, a problem list, a scene, its `layers`, an `items` answer, an `itemOf` answer, a point -- is made afresh by the call that first returns it and frozen to its depth.\
+Every value the scene makes -- an open result, a problem list, a scene, its `layers`, an `items` answer, an `itemOf` or `itemAt` answer, a point -- is made afresh by the call that first returns it and frozen to its depth.\
 A description is the scene's own frozen copy, made when the item is put and returned by reference afterwards; each shape in it holds `tag` and `attrs`, then `text` when it has text or `children` when it has child shapes, and nothing else, each attribute's value a string, so every description the scene returns is a valid argument to `put`, and putting it again to its own item, with no `place`, calls nothing (VS8).\
-Every record holds its properties in the order its form is written here and nothing else; an open result holds `ok`, then `scene` or `problems`; a scene is a frozen object of exactly `layers`, `put`, `remove`, `items`, `itemOf`, `layerElement`, `toDrawing`, `toScreen` and `close`.\
+Every record holds its properties in the order its form is written here and nothing else; an open result holds `ok`, then `scene` or `problems`; a scene is a frozen object of exactly `layers`, `put`, `remove`, `items`, `itemOf`, `itemAt`, `layerElement`, `toDrawing`, `toScreen` and `close`, nine functions after its layers.\
 Every function the scene makes needs no receiver and reads no argument beyond those its form names; nothing the application passes is kept, frozen or changed, but the root and the elements it holds.\
 Tested by: `test/contract/returned-values-and-errors.test.js` (I8), and each capability's own file.
 
 **VS1 -- What the scene touches of the platform.**\
 The scene reaches the platform only through the root the application hands it, and touches exactly:
 - of the root: `ownerDocument`, `appendChild` and `getScreenCTM`, each read once, as the scene opens (VS2), the function read being the one it calls, with the root as its receiver, every time;
-- of the root's document: `createElementNS`, read once likewise, called with the document as its receiver, the SVG namespace `http://www.w3.org/2000/svg` and a tag;
+- of the root's document: `createElementNS`, read once likewise, called with the document as its receiver, the SVG namespace `http://www.w3.org/2000/svg` and a tag; and `elementsFromPoint`, read once as the scene opens, after `createElementNS` and before the root's `appendChild` and `getScreenCTM`, through ordinary property access, and, when it is a function, called by each `itemAt` with the document as its receiver and the point's `x` and `y` (VS12);
+- of the answer `elementsFromPoint` gives: `length` and its indices, as VS12 reads them, and of each element in it nothing but its identity;
 - of each element it makes: `setAttribute`, `removeAttribute`, `appendChild`, `insertBefore` and `remove`, each called as that element's method when it is used, and its `textContent`, only ever written;
 - of a screen transform the root answers, once for each conversion: for `toDrawing` its `inverse`, read and called with the transform as its receiver, and of the transform used, `a`, `b`, `c`, `d`, `e` and `f`, read in that order (VS10).
 
-It reads no other member, reads nothing of an element it made, writes nothing beneath a foreign layer, writes nothing on the root but the layers it appends, and names no global: no `window`, no `document`, no constructor of the platform's.\
+It reads no other member, reads nothing of an element it made, writes nothing beneath a foreign layer, reads none of the root's attributes and writes nothing on the root but the layers it appends (VS13), and names no global: no `window`, no `document`, no constructor of the platform's.\
 So it cannot reach beyond the root it is given, and the same code runs over a browser's elements and over plain objects of their shape.\
-Tested by: `test/contract/keyed-shapes.test.js` (I3, the recording test over the root, its document, the elements made and the transforms answered), and the runtime check's platform-member pass (`tools/check-runtime.mjs`, I12).
+Tested by: `test/contract/keyed-shapes.test.js` (I3, the recording test over the root, its document, the elements made, the transforms and the hit stack answered), `test/contract/shape-at-point.test.js` (I13), and the runtime check's platform-member pass (`tools/check-runtime.mjs`, I12).
 
 **VS2 -- How values are read.**\
-These are the rules the first three components settled (`SNAP-GRID.md`, `INPUT-BINDING.md` and `INPUT-CAPTURE.md` section 11, each component's decision record, D2), adopted whole:
-1. Every value but a point and a screen transform is read as `input-binding` reads one (`INPUT-BINDING.md` section 3.3, IB2 rules 1 to 4, 6, 8 and 9): a plain object's own data properties by descriptor, a property read only where its own keys hold it, an accessor of no form, an inherited property absent, a symbol-named property ignored, a property present as `undefined` of no form, a key whose descriptor reads `undefined` absent, an array dense, of `Array.prototype` and holding no other own string-named key, an index a canonical integer below 2^32 - 1, and a value made in another realm no plain object.
-2. A declaration is read breadth first, as IB2 rule 8 reads one: its prototype, its own keys, the descriptors of `root` and `layers` its own keys hold, in that order; then, when `root`'s descriptor holds an object, its `ownerDocument`, that document's `createElementNS`, and its own `appendChild` and `getScreenCTM`, each through ordinary property access and judged as read, the reading of `root` stopping at the first refused; then `layers`, as an array is read -- `Array.isArray`, its prototype, its own keys, the descriptor of its `length`, then of each index in order; then each layer in index order, read whole before the next: its prototype, its own keys, the descriptors of `name`, `attrs` and `foreign` its own keys hold, in that order, and then, unless it is refused at its own pointer, the values those held, in the same order, `attrs` as rule 5 reads a record; a reflection that throws refuses the value it was made on, and nothing beneath a value refused at its pointer is read.
-3. Every other function reads its arguments once each, in their order, judging each read as it is made, and throws at the first that is malformed, reading nothing after it: `remove` reads its layer and then its key, `items` and `layerElement` their one name, `itemOf` its value by `typeof` and identity alone, running no trap, and `put` its layer, its key, its shapes as an array is read, each shape whole before the next, and last its `place` -- its prototype, its own keys, the descriptor of `before`.
+Every value the scene is handed, and a screen transform the root answers, is read by these rules, which `snap-grid`, `input-binding` and `input-capture` share:
+1. Every value but a point and a screen transform is read by descriptor, so no getter of it runs: a plain object's own data properties by descriptor, a property read only where its own keys hold it, an accessor of no form, an inherited property absent, a symbol-named property ignored, a property present as `undefined` of no form, a key whose descriptor reads `undefined` absent, an array dense, of `Array.prototype` and holding no other own string-named key, an index a canonical integer below 2^32 - 1, and a value made in another realm no plain object.
+2. A declaration is read breadth first: its prototype, its own keys, the descriptors of `root` and `layers` its own keys hold, in that order; then, when `root`'s descriptor holds an object, its `ownerDocument`, that document's `createElementNS` and `elementsFromPoint`, and its own `appendChild` and `getScreenCTM`, each through ordinary property access and judged as read, the reading of `root` stopping at the first refused -- `elementsFromPoint` refused only when its getter throws, and a value of it that is not a function, `undefined` among them, kept as none, so the root opens and `itemAt` refuses; then `layers`, as an array is read -- `Array.isArray`, its prototype, its own keys, the descriptor of its `length`, then of each index in order; then each layer in index order, read whole before the next: its prototype, its own keys, the descriptors of `name`, `attrs` and `foreign` its own keys hold, in that order, and then, unless it is refused at its own pointer, the values those held, in the same order, `attrs` as rule 5 reads a record; a reflection that throws refuses the value it was made on, and nothing beneath a value refused at its pointer is read.
+3. Every other function reads its arguments once each, in their order, judging each read as it is made, and throws at the first that is malformed, reading nothing after it: `remove` reads its layer and then its key, `items` and `layerElement` their one name, `itemOf` its value by `typeof` and identity alone, running no trap, `itemAt` and the conversions their point as rule 6 reads one, and `put` its layer, its key, its shapes as an array is read, each shape whole before the next, and last its `place` -- its prototype, its own keys, the descriptor of `before`.
 4. A shape at a depth is read thus: its depth judged first, so a shape nested deeper than VS5 allows is refused with nothing of it read; then its prototype; its own keys, any key but `tag`, `attrs`, `text` and `children` refusing it; the descriptors of those four its own keys hold, in that order, each judged as read; `tag` absent, or both `text` and `children` present, refusing it; and only then its values, in the same order -- `tag`, `attrs` as rule 5 reads a record, `text`, and `children` as an array, each child read whole, at the next depth, before the next.
 5. An attribute record is read thus: its prototype; its own keys; then each own string-named key in their order -- its name judged against VS5, then its descriptor read and judged, then its value -- the reading stopping at the first refused.
-6. A point given to a conversion, and a screen transform the root answers, are each judged by `typeof` and read through ordinary property access, a browser's being getters: a point's `x` and then its `y`, a transform's `a` to `f` in order, all read before any is judged, as `snap-grid` reads a point.
-7. A getter or a trap met while arguments are read is the application's code and may call the scene: the call takes effect at once, and the function reads the scene's state only after its arguments are read and judged (IB2 rule 9).
+6. A point given to a conversion or to `itemAt`, and a screen transform the root answers, are each judged by `typeof` and read through ordinary property access, a browser's being getters: a point's `x` and then its `y`, a transform's `a` to `f` in order, all read before any is judged.
+7. A getter or a trap met while arguments are read is the application's code and may call the scene: the call takes effect at once, and the function reads the scene's state only after its arguments are read and judged.
 
-Tested by: `test/contract/declared-scene.test.js` (the declaration), `test/contract/keyed-shapes.test.js` (shapes, attribute records and places) and `test/contract/screen-conversion.test.js` (points and transforms), each reading order held by a `Proxy` that records each trap.
+Tested by: `test/contract/declared-scene.test.js` (the declaration), `test/contract/keyed-shapes.test.js` (shapes, attribute records and places), `test/contract/screen-conversion.test.js` (points and transforms) and `test/contract/shape-at-point.test.js` (`elementsFromPoint`, a point for `itemAt` and the hit stack), each reading order held by a `Proxy` that records each trap.
 
 **VS3 -- Opening and closing.**\
 `openScene(declaration)` returns `{ ok: true, scene }` or `{ ok: false, problems }`.\
 A declaration is a plain object holding `layers` and, optionally, `root`:
-- `root`, an object whose `ownerDocument` is an object whose `createElementNS` is a function, and whose `appendChild` and `getScreenCTM` are functions;
+- `root`, an object whose `ownerDocument` is an object whose `createElementNS` is a function and whose `elementsFromPoint` reads without throwing -- a function, or any other value, which is kept as none -- and whose `appendChild` and `getScreenCTM` are functions;
 - `layers`, a non-empty array of plain objects, each holding `name`, a non-empty string unique among them, and optionally `attrs`, an attribute record of VS5's form written on the layer's element, and `foreign`, a boolean, `false` when absent.
 
-A problem is `{ pointer, problem }` as `input-binding`'s IB3 defines one, ordered by pointer and then by problem by UTF-16 code unit, no record twice; a check that fails at a pointer suppresses every check beneath it, and none at a sibling's:
+A problem is a frozen `{ pointer, problem }`: `pointer` an RFC 6901 JSON Pointer into the declaration, `""` the declaration itself, and `problem` one of the codes below; the problems are ordered by pointer and then by problem by UTF-16 code unit, no record twice; a check that fails at a pointer suppresses every check beneath it, and none at a sibling's:
 
 | Step | When | Problem, at pointer |
 |---|---|---|
@@ -129,14 +132,14 @@ A problem is `{ pointer, problem }` as `input-binding`'s IB3 defines one, ordere
 2. If a platform method throws while it does so, it calls `remove` on every layer element it made -- the one in progress first, which does nothing to an element the root never took -- and then the others in reverse of the order made, attempting each, and throws the error first thrown, unchanged; nothing is left in the root.
 3. With no root it makes nothing; its scene holds and reads back data alone.
 4. A scene is *open* until `close` is first called, *closed* from then on, and *failed* from the moment a platform method throws while it writes (VS7); every function but `close` throws Errors' `Error` once it is closed or failed, and every function, `close` among them, throws it while a put or a removal writes to the platform, changing nothing, since it is not re-entrant there.
-5. `close()`, on its first call not made while a put or a removal writes, marks the scene closed first, then calls `remove` on every layer element it made, in reverse of the order made, attempting each, and throws the first error a removal threw, unchanged, or returns `undefined`; every later call -- one made from inside a removal among them -- returns `undefined` and calls nothing, as `input-capture`'s IC3 settled, and any other function called from inside a removal throws, the scene being closed; removing a layer removes every element the scene made beneath it.
+5. `close()`, on its first call not made while a put or a removal writes, marks the scene closed first, then calls `remove` on every layer element it made, in reverse of the order made, attempting each, and throws the first error a removal threw, unchanged, or returns `undefined`; every later call -- one made from inside a removal among them -- returns `undefined` and calls nothing, and any other function called from inside a removal throws, the scene being closed; removing a layer removes every element the scene made beneath it.
 
 So no element the scene made outlives a failed opening or a close unless a removal threw.\
 Tested by: `test/contract/declared-scene.test.js` (I1, I2).
 
 **VS4 -- Layers.**\
 A scene layer holds items, back to front in the order VS6 places them; a foreign layer holds whatever the application draws beneath the element `layerElement(name)` answers, which the scene never writes beneath, reads or removes but as VS3 removes every layer.\
-A layer's element is the scene's: the application writes nothing on it, foreign or not, and nothing beneath a scene layer's, so the scene can give every layer what a view needs when one arrives (the design's D6).\
+A layer's element is the scene's: the application writes nothing on it, foreign or not, and nothing beneath a scene layer's, so the scene can give every layer what a view needs when one arrives.\
 `layers` is a frozen copy of the declaration's layers, each `{ name, attrs, foreign }`.\
 `layerElement(name)` answers a foreign layer's element; a name that is no foreign layer is malformed, and a scene with no root refuses.\
 A function taking a layer takes the name of a scene layer; any other value, a foreign layer's name among them, is malformed.\
@@ -158,7 +161,7 @@ Tested by: `test/contract/keyed-shapes.test.js` (I5).
 `put(layer, key, shapes, place?)` makes `shapes` the description of the item `key` in `layer`, and returns `undefined`:
 - `key` is a non-empty string; `place`, when given, is a plain object holding at most `before`, which is `null` or a non-empty string other than `key`;
 - an item not in the layer is placed before the item `before` names, or last when `before` is `null` or `place` holds none;
-- an item in the layer keeps its place when `place` holds no `before`, and otherwise is moved before the item `before` names, or last when `before` is `null`, whether or not it stands there already, as draw's stacking inserts each element it places;
+- an item in the layer keeps its place when `place` holds no `before`, and otherwise is moved before the item `before` names, or last when `before` is `null`, whether or not it stands there already, its elements inserted again each time;
 - a `before` naming no item of the layer throws Errors' `Error`, after the arguments are read and before anything changes.
 
 `remove(layer, key)` takes the item out of the layer, its elements with it, and returns `undefined`; a key the layer does not hold changes nothing.\
@@ -187,7 +190,7 @@ Tested by: `test/contract/keyed-shapes.test.js` (I6, I8).
 
 **VS9 -- The shape at an element.**\
 `itemOf(value)` answers a frozen `{ layer, key, path }` when `value` is an element the scene made for a shape of an item it holds, `path` a frozen array of the shape's indices from the item's own shapes down; and `null` for any other value -- a layer's element, a foreign layer's content, the root, an element the scene removed, anything the scene did not make.\
-It reads nothing of `value`, so it runs no application code; given the target of a pointer event, it answers what the platform found under the point; like every function but `close`, it throws once the scene is closed or failed, and while a put or a removal writes.\
+It reads nothing of `value`, so it runs no application code; given the target of a pointer event, it answers what the platform found under the point -- but while the pointer is captured every event's target is the element holding the capture, which `itemOf` answers `null` for, and `itemAt` answers by the event's screen point instead (VS12); like every function but `close`, it throws once the scene is closed or failed, and while a put or a removal writes.\
 Tested by: `test/contract/shape-at-element.test.js` (I7), and in Chrome with trusted presses by `test/browser/real-chrome.test.js` (I10).
 
 **VS10 -- Conversions.**\
@@ -209,28 +212,57 @@ Tested by: `test/contract/screen-conversion.test.js` (I9), and against `DOMPoint
 It imports no package and no module particular to one runtime, names and declares no global, touches no platform object but those VS1 names, and reads no clock and no randomness and holds no timer, so it runs over a browser's elements and, where there is no browser, over plain objects of their shape or with no root at all.\
 Its TypeScript declarations state the platform slice VS1 touches as its own structural types, so a browser's `<svg>` element is assignable as a root; a shape's properties are read-only, and the type of a returned description is assignable to `put`'s.\
 The slice is generic in the kind of element the root's document makes, so a browser's root makes `layerElement` answer its `Element`, and a root of plain objects, or none, the slice's own `SceneElement` (`docs/DECISIONS.md`, `D2`).\
-Tested by: `test/contract/public-surface.test.js`, `test/contract/public-types.test.js` (I11, compiled from `test/types/`), the source check (`tools/check-source.mjs`), the runtime check (`tools/check-runtime.mjs`), the clock and chance check (`tools/check-clock-and-chance.mjs`), the real-Chrome test (`test/browser/`, I10) and the consumer test (`tools/consumer-test.mjs`).
+Tested by: `test/contract/public-surface.test.js`, `test/contract/public-types.test.js` (I11, compiled from `test/types/`), the source check (`tools/check-source.mjs`), the runtime check (`tools/check-runtime.mjs`), the clock and chance check (`tools/check-clock-and-chance.mjs`), the real-Chrome tests (`test/browser/`, I10 and I14) and the consumer test (`tools/consumer-test.mjs`).
+
+**VS12 -- The shape at a point.**\
+`itemAt(screen)` answers a frozen `{ layer, key, path }`, as `itemOf` answers it, for the first element of the platform's hit stack at the screen point that the scene made for a shape of an item it holds, and `null` when there is none:
+1. the point is read as VS2 rule 6 says, and refused unless its `x` and `y` are finite numbers, as a conversion reads one (VS10);
+2. the scene's state is judged before anything of the scene is read -- writing, closed and failed refused as every function refuses them; then a scene with no root, or whose document held no `elementsFromPoint` function when it opened, refused with Errors' `Error`;
+3. the document's `elementsFromPoint`, the function read as the scene opened, is called with the document as its receiver and the point's `x` and `y`; an answer that `Array.isArray` does not accept is refused with Errors' `Error`;
+4. the answer's `length` is read once, by ordinary access, and refused unless a safe non-negative integer; then indices from 0 below it are read in order, by ordinary access, stopping at the first element the scene made for a shape of an item it still holds, as `itemOf` recognises one; every other element -- one made for an item since removed, the root, a layer's element, a foreign layer's content, anything else on the page -- is passed over;
+5. the state is judged again, a scene closed or failed meanwhile refused with Errors' `Error`, and the item answered.
+
+An error the platform or a getter throws propagates unchanged, and leaves the scene open; a call a getter makes on the scene takes effect at once.\
+So `itemAt` names the first owned item anywhere in the hit stack, looking through what the scene did not make; it is not the topmost hit, and under an opaque element the scene did not make it answers the item beneath, where `itemOf` of the event's target answers `null`.\
+The screen point is in the units `input-capture`'s `screen` holds and `toScreen` answers, the viewport's: a pointer event's `clientX` and `clientY`.\
+The platform leaves out of its answer every element whose `pointer-events` is `none`, so a layer an application declares with that attribute is looked through (measured in Chrome, under a captured pointer).\
+Unlike `itemOf`, whose argument is the event's target, it answers under a captured pointer, whose every event targets the element holding the capture (measured).\
+Tested by: `test/contract/shape-at-point.test.js` (I13), and in Chrome with trusted input by `test/browser/captured-pointer.test.js` (I14).
+
+**VS13 -- What the application may write on the root.**\
+The root and its attributes are the application's: it may set the root's `viewBox`, its size, its `preserveAspectRatio`, its classes and its styles, before or after the scene opens; the scene never reads or writes them, and each conversion and `itemAt` follows the root as it stands when asked (VS10).\
+A layer's element stays the scene's alone (VS4), so a layer's attributes are set only by its declaration.\
+A view the scene holds -- panned and zoomed, each layer told the visible area and the scale -- is held until its first consumer is designed; an application's own `viewBox` is no view of the scene's.\
+Tested by: `test/contract/keyed-shapes.test.js` (I3, the recording root logging no read but VS1's), and in Chrome by `test/browser/captured-pointer.test.js` (I14, a `viewBox` set after opening followed).
 
 **Invariants.**\
-There is no conformance kit (the design's D10): nothing in vector-scene is a port another party implements.\
+There is no conformance kit: nothing in vector-scene is a port another party implements.\
 *vector-scene* marks what the component's own tests hold; *gate* what its gate holds.
 
 | # | Invariant | Held by |
 |---|---|---|
 | I1 | `openScene` never throws while it judges a declaration, and answers every declaration with exactly VS3's problems, from a table of cases: present `undefined`, accessors, a phantom key, a revoked and a trapping `Proxy`, a declaration whose descriptor read throws -- `not-an-object` at `""`, nothing further read -- a function as the root, a root lacking each member in turn, each layer refusal, `attrs` refused whole and nothing beneath it checked, a duplicate name beside an invalid one, a value from another realm. | vector-scene |
 | I2 | A rooted scene's layers are made and appended in order with their attributes; a throw at each platform call of opening, before or after the root takes the layer, leaves the root as it was and throws that error; `close` removes every layer in reverse, attempting each when one throws, then throws the first; a second `close` calls nothing, as does a `close` made from inside a removal, while a `put` made from there throws and, uncaught, is that removal's error; every other function throws once closed or failed; a platform method re-entering any function, `close` among them, while a put or a removal writes is refused and changes nothing. | vector-scene |
-| I3 | The scene touches nothing of the platform outside VS1: with a recording root, document, made elements and transforms, an opening, puts that create, patch, move and replace, a removal, both conversions and `close` log exactly VS1's reads, once each, and VS7's calls in order, and no read of a made element. | vector-scene |
+| I3 | The scene touches nothing of the platform outside VS1: with a recording root, document, made elements, transforms and hit stack, an opening, puts that create, patch, move and replace, a removal, `itemAt`, both conversions and `close` log exactly VS1's reads, once each, and VS7's calls in order, and no read of a made element. | vector-scene |
 | I4 | Over generated sequences of puts, moves and removals on a rooted scene, after every call the elements under each scene layer equal the descriptions `items` answers, each element's attributes compared as a map from name to value and an element made holding them in description order; each call made exactly VS7's platform calls, against a model of VS7 written apart. | vector-scene |
 | I5 | Every reading of VS2 and VS5 from a table of arguments, each order held by a `Proxy` that records each trap: each refusal at each place stopping the reading there, a malformed argument refused before a closed scene's state is read, an accessor attribute refused with no getter run, a shape at depth 33 refused with nothing of it read, a shape holding both `text` and `children` refused before its `attrs` is read, a trap that calls the scene taking effect first, an `on` attribute in any case refused, a number written as `String` writes it, `-0` as `0`. | vector-scene |
 | I6 | The same sequence on a scene with no root and on a rooted one gives equal `items` after every call. | vector-scene |
 | I7 | `itemOf` answers every element made, at every depth, with its item and path, after patches and moves; `null` for a layer element, a foreign layer's content, the root, a removed element, a primitive and a `Proxy`, whose traps never run; and throws once the scene is closed or failed. | vector-scene |
 | I8 | Every returned value is fresh and frozen to its depth; a description is the very value `items` answers again, holds `text` or `children` only when not empty, and is accepted by `put`, putting it again calling nothing; putting each layer's items into a fresh scene gives equal items; keys in their written order; no function needs a receiver. | vector-scene |
 | I9 | Conversions compute VS10's arithmetic over recorded transforms, `-0` and extreme values among them; refuse a point that is no object, holds a non-finite coordinate or is read through a throwing getter; refuse with `Error` no transform, an `inverse` that is no function or answers no object, a member not a finite number -- a string, or the `NaN` a singular `DOMMatrix` inverse answers -- and an answer that overflows; and let a throwing getter's or `inverse`'s error out unchanged, the scene still open. | vector-scene |
-| I10 | In headless Chrome, on an SVG root scaled and offset in its page: puts, patches, moves and removals leave each layer's elements equal to `items` as I4 compares them; an element kept across a sibling item's insertion keeps a running transition; a trusted press on a child shape, on an item's own shape, on the ground and in a foreign layer is mapped by `itemOf` of its target to that item and path, or `null`; `toDrawing` and `toScreen` equal `DOMPoint`'s `matrixTransform` over the root's screen transform for thousands of points; `close` leaves the root as found; Chrome is launched and torn down as `input-capture`'s I10 settled, so the test can neither fail nor hang on teardown. | gate |
+| I10 | In headless Chrome, on an SVG root scaled and offset in its page: puts, patches, moves and removals leave each layer's elements equal to `items` as I4 compares them; an element kept across a sibling item's insertion keeps a running transition; a trusted press on a child shape, on an item's own shape, on the ground and in a foreign layer is mapped by `itemOf` of its target to that item and path, or `null`; `toDrawing` and `toScreen` equal `DOMPoint`'s `matrixTransform` over the root's screen transform for thousands of points; `close` leaves the root as found; Chrome is launched with a profile and a debugging port of its own and its whole process group ended at teardown, so the test can neither fail nor hang on teardown. | gate |
 | I11 | A consumer compiled with `tsc --noEmit` under strict settings, with and without `exactOptionalPropertyTypes`, passes an `SVGSVGElement` as `root` and an `items` answer's shapes to `put`, and lines that write a shape's property or give both `text` and `children` must fail to compile. | vector-scene |
-| I12 | The source names no consumer's vocabulary and declares no global; the built files import no package, name no runtime global, no clock, timer or source of chance, and no route to `Function` (the design's section 7). | gate |
+| I12 | The source names no consumer's vocabulary and declares no global; the built files import no package, name no runtime global, no clock, timer or source of chance, and no route to `Function`. | gate |
+| I13 | With a recording document, `elementsFromPoint` read once as the scene opens, in VS2 rule 2's order, and called once per `itemAt` with the document as receiver and the point; a throwing getter refusing `/root`; a non-function opening; the first element the scene made for an item it still holds answering, with its path, nested shapes among them, an element of a removed item passed over; `null` when none is; refused with no root, with no member, closed or failed, with a malformed point, with an answer not an array and with a `length` not a safe non-negative integer; `length` read once, so an answer whose index getter appends an owned element answers `null`; a getter that throws, propagated with the scene open; a getter that closes the scene, refused. | vector-scene |
+| I14 | In headless Chrome: with the pointer taken on a press, `itemAt` of each move's screen point answers the item under it while the target stays the capturing element; an item under a layer declared `pointer-events` `none` is answered through it; with no pointer taken and nothing the scene did not make above the items, `itemAt(screen)` equals `itemOf(target)` for trusted presses over a grid of points; under an opaque foreign element above an item, `itemAt` answers the item and `itemOf` `null`; a `viewBox` the application sets after opening is followed by `toDrawing`, `toScreen` and `itemAt`. | gate |
+| I15 | Beside `0.1.0`: `0.1.0`'s contract tables give the same answers and calls but for the changes the closing paragraph lists. | vector-scene |
 
-I10 is held by `test/browser/real-chrome.test.js`, which the gate runs; I12 by `tools/check-vocabulary.mjs`, `tools/check-source.mjs`, `tools/check-runtime.mjs` and `tools/check-clock-and-chance.mjs`, whose own tests are `test/tools/gate-checks.test.js`.
+I10 is held by `test/browser/real-chrome.test.js` and I14 by `test/browser/captured-pointer.test.js`, which the gate runs; I12 by `tools/check-vocabulary.mjs`, `tools/check-source.mjs`, `tools/check-runtime.mjs` and `tools/check-clock-and-chance.mjs`, whose own tests are `test/tools/gate-checks.test.js`; I13 by `test/contract/shape-at-point.test.js`; and I15 by `test/contract/beside-0.1.0.test.js`, run against the `0.1.0` release's built files, kept in `test/fixtures/v0.1.0/`.
+
+**What changes beside `0.1.0`.**
+- A root whose document's `elementsFromPoint` getter throws, which `0.1.0` opened, is refused, since the scene now reads that member as it opens.
+- The scene gains `itemAt` after `itemOf`, which only a consumer listing a scene's keys would see.
+- Nothing else: a root whose document holds no `elementsFromPoint` -- a test's fake document among them -- opens as before, and an application that calls no `itemAt` meets every answer, call and read of `0.1.0` but that one read and that one key (I15).
 
 ---
 
@@ -239,9 +271,9 @@ I10 is held by `test/browser/real-chrome.test.js`, which the gate runs; I12 by `
 This repository, `apnex/vector-scene`, and its package `@apnex/vector-scene`, released only by its own CI as a tarball attached to a GitHub release, drafted, verified and then published (`.github/workflows/release.yml`).\
 The package exports `openScene` from its one path, as `export-map.json` records.\
 The code is TypeScript in `src/`, built to `dist/`, which only a release holds.\
-The tests are in `test/`: one file per capability in `test/contract/`, with `returned-values-and-errors.test.js`, `public-types.test.js`, `public-surface.test.js` and `contract-coverage.test.js` beside them; I10's page and its test in `test/browser/`; I11's consumer in `test/types/`; the fake platform, the recording platform, the model of VS7 and the generator in `test/support/`; and the gate checks' own tests in `test/tools/`.\
-The gate, `npm run gate`, builds, runs the tests -- the real-Chrome test among them -- then the vocabulary, source, runtime, clock and chance, and export-map checks in `tools/`, and mission-kit's style checks.\
-The design of record is draw's `dev/design/components/VECTOR-SCENE.md` (`apnex/drawv2`), whose section 3 this contract carries, whose section 4 holds the invariants above, and whose section 7 states where this repository differs from the shared parts `snap-grid` settled and `input-binding` and `input-capture` built again.
+The tests are in `test/`: one file per capability in `test/contract/`, with `returned-values-and-errors.test.js`, `beside-0.1.0.test.js`, `public-types.test.js`, `public-surface.test.js` and `contract-coverage.test.js` beside them; the `0.1.0` release's built files, which I15 runs, in `test/fixtures/v0.1.0/`; I10's and I14's pages and their tests in `test/browser/`; I11's consumer in `test/types/`; the fake platform, the recording platform, the model of VS7 and the generator in `test/support/`; and the gate checks' own tests in `test/tools/`.\
+The gate, `npm run gate`, builds, runs the tests -- the real-Chrome tests among them -- then the vocabulary, source, runtime, clock and chance, and export-map checks in `tools/`, and mission-kit's style checks.\
+The design of record and the rulings are kept in draw's records, `apnex/drawv2`.
 
 ---
 
@@ -251,6 +283,7 @@ The design of record is draw's `dev/design/components/VECTOR-SCENE.md` (`apnex/d
 - An application draws its own content as SVG and keeps that drawing in step with its data as the data changes.
 - The same drawing must also be produced where there is no browser, from the same code.
 - Something must say which of its things a pointer landed on, by the platform's own hit test.
+- Something must say what lies under a captured pointer, whose every event targets the capturing element -- `itemAt`.
 
 **It is the wrong tool when:**
 
@@ -258,9 +291,9 @@ The design of record is draw's `dev/design/components/VECTOR-SCENE.md` (`apnex/d
 |---|---|
 | what an input means, or a pointer's events as facts | not an input layer: that is `input-binding` and `input-capture` |
 | what a thing looks like, its styles or its state's meaning | not a theme: the application describes every attribute |
-| a shape found by geometry, with no platform | not a geometry engine: it answers by the platform's elements (the design's D4) |
-| panning or zooming the view | not yet: held until its first consumer is designed (the design's D6) |
-| animation run frame by frame, or a canvas or WebGL drawing | not an animator: draw it in a foreign layer (the design's D5) |
+| a shape found by geometry, with no platform | not a geometry engine: it answers by the platform's elements, never by a second hit test that would disagree with the platform's at every stroke's edge |
+| panning or zooming the view | not yet: held until its first consumer is designed |
+| animation run frame by frame, or a canvas or WebGL drawing | not an animator: draw it in a foreign layer |
 | HTML elements | not a page builder: every shape is an SVG element |
 | SVG from an untrusted source drawn safely | not a sanitizer: it judges a shape's form, never its meaning (VS5) |
 
@@ -274,8 +307,9 @@ Internal and sovereign: a measured gap is recorded where both sides can see it, 
 
 ## Edges
 
-**Contains:** the layers, the descriptions, the bringing of the platform to them, the element-to-item map, the conversions.\
+**Contains:** the layers, the descriptions, the bringing of the platform to them, the element-to-item map, the item at a point, the conversions.\
 **Consumes:** nothing.\
-**Consumed-by:** draw (H26.4), then the gesture tester (H26.5); named later, zorg's web canvas (zorg D31, D35).
+**Consumed-by:** draw, then `input-tester`; named later, zorg's web canvas.
 
-The tester draws its keys and mouse as items, lights one by putting it again with another class, asks `itemOf` with `input-capture`'s target to know which key a pointer is over, and hands `toDrawing` to `input-capture` as its conversion.
+The tester draws its keys and mouse as items, lights one by putting it again with another class, and hands `toDrawing` to `input-capture` as its conversion.\
+The tester asks `itemOf` with `input-capture`'s target and, when that answers `null`, `itemAt` with the fact's `screen`, so a captured pointer, whose target is the capturing element, is answered by point.

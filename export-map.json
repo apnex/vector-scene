@@ -3,7 +3,7 @@
   "paths": {
     ".": {
       "exports": {
-        "openScene": { "part": "vector-scene", "serves": ["declared-scene", "keyed-shapes", "shape-at-element", "screen-conversion"] }
+        "openScene": { "part": "vector-scene", "serves": ["declared-scene", "keyed-shapes", "shape-at-element", "shape-at-point", "screen-conversion"] }
       }
     }
   },
