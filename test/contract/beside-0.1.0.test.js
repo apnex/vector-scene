@@ -258,7 +258,7 @@ test("I15: VS10's conversions over recorded transforms -- extremes, -0, a singul
 		{ a: 2, b: 0, c: 0, d: 2, e: 10, f: 20 }, { a: -0, b: 1, c: -1, d: -0, e: 0, f: -0 }, { a: 1e300, b: 0, c: 0, d: 1e300, e: 0, f: 0 },
 		{ a: 0, b: 0, c: 0, d: 0, e: 1, f: 1 }, { a: 1, b: 0, c: 0, d: 1, e: "0", f: 0 }, { a: 1, b: 0, c: 0, d: 1, e: 0, f: NaN },
 	];
-	const points = [{ x: 0, y: 0 }, { x: -0, y: 5e-324 }, { x: 1.7976931348623157e308, y: 1 }, { x: -12.5, y: 3 }, { x: NaN, y: 0 }, { x: 1, y: Infinity }];
+	const points = [{ x: 0, y: 0 }, { x: -0, y: 5e-324 }, { x: Number.MAX_VALUE, y: 1 }, { x: -12.5, y: 3 }, { x: NaN, y: 0 }, { x: 1, y: Infinity }];
 	const { older, newer } = beside((run) => {
 		for (const [t, ctm] of transforms.entries()) {
 			const platform = fakeRoot(ctm);
