@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>vector-scene I14</title>
+<script type="importmap">{ "imports": { "@apnex/vector-scene": "/dist/index.js" } }</script>
+<style>
+html, body { margin: 0; }
+svg { position: absolute; left: 30px; top: 40px; display: block; touch-action: none; }
+</style>
+</head>
+<body>
+<!-- the root lies 30 px right and 40 px down the page, 400 by 300 screen pixels showing a viewBox of 200 by 150
+drawing units from (0, 0), so scaled by 2 until the page sets another viewBox; the ground is the application's,
+before the layers the scene appends -->
+<svg id="root" width="400" height="300" viewBox="0 0 200 150"><rect id="ground" x="0" y="0" width="200" height="150" fill="#eee"/></svg>
+<script type="module" src="/test/browser/i14-page.js"></script>
+</body>
+</html>
