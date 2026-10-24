@@ -1,6 +1,6 @@
 # vector-scene - Vision
 
-**Status: ratified by the director as written, 2026-10-23 (draw's ruling `H26-11`, in draw's `dev/DECISIONS.md`); enduring.**\
+**Status: ratified by the director as written, 2026-10-23 (draw's ruling `H26-11`, in draw's `dev/DECISIONS.md`); amended 2026-10-24 to absorb draw's ruling `H26-14` -- the item under a screen point; enduring.**\
 This document states why vector-scene exists and what it will never be.\
 It carries no current state, no roadmap, and no schedule.
 
@@ -17,7 +17,7 @@ Applications that draw build elements by hand and update them by hand, and every
 `vector-scene` holds the drawing once: the application describes its items, the scene makes the platform show exactly that, tells it which item an element belongs to, and draws the same description with no platform at all.
 
 **What it is.**\
-An embeddable library with one function: open a scene on a root, or on none, declare its layers, and put, move and remove items of shapes by key, read them back, map an element to its item, and convert points through the root.
+An embeddable library with one function: open a scene on a root, or on none, declare its layers, and put, move and remove items of shapes by key, read them back, map an element or a screen point to its item, and convert points through the root.
 
 **What it is not.**
 - Not a theme: what anything looks like is the application's.
