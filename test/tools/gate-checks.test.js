@@ -75,11 +75,11 @@ test("I12: the traps section 7 names for an SVG component are caught -- the DOM'
 	assert.deepEqual(caught("const anchorPoint = 1; // layout"), ["anchor", "layout"]);
 	assert.deepEqual(caught("// a shape, an element, an item, a layer, lays out, a key, a point"), []);
 	const names = `openScene root layers name attrs foreign ok scene problems pointer problem not-an-object unknown-property
-missing-property invalid-value duplicate-name layers put remove items itemOf layerElement toDrawing toScreen close tag
-text children before key shapes path layer x y ownerDocument appendChild getScreenCTM createElementNS setAttribute
-removeAttribute insertBefore textContent inverse a b c d e f declared-scene keyed-shapes shape-at-element
+missing-property invalid-value duplicate-name layers put remove items itemOf itemAt layerElement toDrawing toScreen close tag
+text children before key shapes path layer x y ownerDocument appendChild getScreenCTM createElementNS elementsFromPoint setAttribute
+removeAttribute insertBefore textContent inverse a b c d e f declared-scene keyed-shapes shape-at-element shape-at-point
 screen-conversion vector-scene item shape element description place point transform screen drawing open closed failed
-writes platform slice scene layer foreign layer attribute record svg namespace`;
+writes platform slice scene layer foreign layer attribute record svg namespace hit stack length`;
 	assert.deepEqual(findVocabulary(names, lists), []);
 });
 
@@ -92,11 +92,43 @@ test("I12, VS1: the runtime check's platform members are lib.dom.d.ts's, and VS1
 	for (const name of Object.values(PLATFORM_SLICE).flat()) assert.ok(members.has(name), `${name}, of the slice, is a platform member the check allows`);
 	assert.deepEqual(PLATFORM_SLICE, {
 		root: ["ownerDocument", "appendChild", "getScreenCTM"],
-		document: ["createElementNS"],
+		document: ["createElementNS", "elementsFromPoint"],
 		element: ["setAttribute", "removeAttribute", "appendChild", "insertBefore", "remove", "textContent"],
 		transform: ["inverse", "a", "b", "c", "d", "e", "f"],
 		point: ["x", "y"],
 	});
+});
+
+test("I12, VS1, VS12: the document's row holds elementsFromPoint -- a built file naming it passes, the control; one naming elementFromPoint, its singular neighbour, fails, the falsifier", () => {
+	const finding = (name) => `names ${name}, a platform member outside VS1's slice`;
+	const control = [
+		"export const a = (rootDocument, x, y) => rootDocument.elementsFromPoint(x, y);\n",
+		"export const b = (platform, x, y) => Reflect.apply(platform.elementsFromPoint, platform.rootDocument, [x, y]);\n",
+		"export const c = ({ elementsFromPoint }) => elementsFromPoint;\n",
+		"export const d = (rootDocument) => rootDocument[\"elementsFromPoint\"];\n",
+	];
+	for (const text of control) assert.deepEqual(findRuntimeUses(text), [], text);
+	const falsifier = [
+		"export const a = (rootDocument, x, y) => rootDocument.elementFromPoint(x, y);\n",
+		"export const b = ({ elementFromPoint }) => elementFromPoint;\n",
+		"export const c = (rootDocument) => Reflect.get(rootDocument, \"elementFromPoint\");\n",
+	];
+	for (const text of falsifier) assert.deepEqual(findRuntimeUses(text).map((f) => f.finding), [finding("elementFromPoint")], text);
+	// the built files name elementsFromPoint, and pass; elementFromPoint planted in a copy of them fails
+	const built = fs.readdirSync(path.join(root, "dist")).filter((f) => f.endsWith(".js")).map((f) => fs.readFileSync(path.join(root, "dist", f), "utf8"));
+	assert.ok(built.some((text) => text.includes(".elementsFromPoint")), "a built file names elementsFromPoint as a member");
+	assert.equal(run("check-runtime.mjs").status, 0);
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vector-scene-dist-"));
+	try {
+		fs.cpSync(path.join(root, "dist"), dir, { recursive: true });
+		const file = path.join(dir, "shape-at-point.js");
+		fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("Reflect.apply(elementsFromPoint, rootDocument, [point.x, point.y])", "rootDocument.elementFromPoint(point.x, point.y)"));
+		const r = run("check-runtime.mjs", dir);
+		assert.equal(r.status, 1);
+		assert.match(r.stdout, /shape-at-point\.js:\d+  names elementFromPoint, a platform member outside VS1's slice/);
+	} finally {
+		fs.rmSync(dir, { recursive: true, force: true });
+	}
 });
 
 test("I12, VS1: the runtime check fails on a platform member outside the slice -- getAttribute, childNodes, getBoundingClientRect -- by dot, brackets, destructuring, in and Reflect; and passes the slice, a point's x and an array's length", () => {

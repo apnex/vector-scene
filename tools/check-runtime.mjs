@@ -19,8 +19,8 @@
 // XMLDocument, every SVG element interface, DOMMatrix and DOMMatrixReadOnly, and every interface they extend,
 // Element, Node and EventTarget among them -- are platform members; a built file may read, call, write or
 // destructure only those VS1 names -- the root's ownerDocument, appendChild and getScreenCTM; the
-// document's createElementNS; an element's setAttribute, removeAttribute, appendChild, insertBefore, remove
-// and textContent; a transform's inverse and a to f -- and x and y, which the scene reads of the point an
+// document's createElementNS and elementsFromPoint; an element's setAttribute, removeAttribute, appendChild,
+// insertBefore, remove and textContent; a transform's inverse and a to f -- and x and y, which the scene reads of the point an
 // application hands a conversion (VS2 rule 6), names an svg element also holds. A platform member outside
 // the slice -- getAttribute, childNodes, getBoundingClientRect, parentNode, querySelector, children,
 // innerHTML and the rest -- is a finding wherever it is named as a member: by dot, by brackets with a string
@@ -58,7 +58,7 @@ export const ALLOWED_GLOBALS = Object.freeze(["Array", "Error", "JSON", "Map", "
 /** VS1's platform slice, and the point's x and y (VS2 rule 6): the only platform members a built file may name. */
 export const PLATFORM_SLICE = Object.freeze({
 	root: ["ownerDocument", "appendChild", "getScreenCTM"],
-	document: ["createElementNS"],
+	document: ["createElementNS", "elementsFromPoint"],
 	element: ["setAttribute", "removeAttribute", "appendChild", "insertBefore", "remove", "textContent"],
 	transform: ["inverse", "a", "b", "c", "d", "e", "f"],
 	point: ["x", "y"],

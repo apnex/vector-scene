@@ -1,5 +1,5 @@
 /**
- * Opening a scene, and every function of an open one (CONTRACT.md, VS3, VS4, VS6, VS8, VS9 and VS10).
+ * Opening a scene, and every function of an open one (CONTRACT.md, VS3, VS4, VS6, VS8, VS9, VS10 and VS12).
  *
  * openScene reads and judges the declaration first, calling no platform method; then, with a root, for each
  * layer in order it makes a <g>, sets the layer's attributes on it in order, and appends it to the root. If a
@@ -18,6 +18,7 @@ import { isObject, malformed, readRecordArgument } from "./argument-reading.js";
 import { convertPoint, readPoint } from "./conversion.js";
 import { judgeDeclaration } from "./declaration-reading.js";
 import { elementCalls, elementWriter, SVG_NAMESPACE, type ElementRecord, type ElementWriter, type ItemRecord } from "./scene-writing.js";
+import { firstHeldAtPoint } from "./shape-at-point.js";
 import { frozenAttributes, readShapes } from "./shape-reading.js";
 import type { ElementSlice, OpenSceneResult, Scene, SceneDeclaration, SceneElement, SceneItem, SceneLayer, ScenePoint, ShapeAtElement } from "./types.js";
 
@@ -222,16 +223,36 @@ function openSceneOver(declaration: unknown): OpenSceneResult {
 		return Object.freeze(target.items.map((item) => Object.freeze({ key: item.key, shapes: item.shapes })));
 	};
 
+	/** VS9 and VS12: the frozen item and path of an element the scene made and still holds. */
+	const shapeOf = (record: ElementRecord): ShapeAtElement => {
+		const path: number[] = [];
+		for (let at: ElementRecord | null = record; at !== null; at = at.parent) path.unshift(at.index);
+		return Object.freeze({ layer: record.holder.layer, key: record.holder.key, path: Object.freeze(path) });
+	};
+
 	/** VS9: the item and path an element the scene made belongs to, read by identity alone, or null. */
 	const itemOf = (value: unknown): ShapeAtElement | null => {
 		const holdsIdentity = (typeof value === "object" && value !== null) || typeof value === "function";
 		judgeState("itemOf");
 		if (!holdsIdentity || writer === null) return null;
 		const record = writer.recordOf(value as object);
-		if (record === undefined) return null;
-		const path: number[] = [];
-		for (let at: ElementRecord | null = record; at !== null; at = at.parent) path.unshift(at.index);
-		return Object.freeze({ layer: record.holder.layer, key: record.holder.key, path: Object.freeze(path) });
+		return record === undefined ? null : shapeOf(record);
+	};
+
+	/**
+	 * VS12: the item and path of the first element of the platform's hit stack at a screen point that the
+	 * scene made for a shape of an item it still holds, or null: the point read first, then the scene's state,
+	 * then the platform asked, and the state judged again, since a getter of its answer may close the scene.
+	 */
+	const itemAt = (screen: unknown): ShapeAtElement | null => {
+		const fn = "itemAt";
+		const point = readPoint(fn, screen);
+		judgeState(fn);
+		if (platform === null || writer === null) throw new Error(`${fn}: the scene has no root, so no point has an element`);
+		if (platform.elementsFromPoint === null) throw new Error(`${fn}: the root's document held no elementsFromPoint function when the scene opened`);
+		const record = firstHeldAtPoint(fn, platform.rootDocument, platform.elementsFromPoint, point, writer.recordOf);
+		if (state !== "open") throw new Error(`${fn}: the scene ${state === "closed" ? "was closed" : "failed"} while the platform's answer was read`);
+		return record === undefined ? null : shapeOf(record);
 	};
 
 	/** VS4: a foreign layer's element. */
@@ -274,7 +295,7 @@ function openSceneOver(declaration: unknown): OpenSceneResult {
 
 	const toDrawing = (screen: unknown): ScenePoint => convert("toDrawing", screen, true);
 	const toScreen = (point: unknown): ScenePoint => convert("toScreen", point, false);
-	for (const fn of [put, remove, items, itemOf, layerElement, toDrawing, toScreen, close]) Object.freeze(fn);
-	const scene: Scene = Object.freeze({ layers, put, remove, items, itemOf, layerElement, toDrawing, toScreen, close });
+	for (const fn of [put, remove, items, itemOf, itemAt, layerElement, toDrawing, toScreen, close]) Object.freeze(fn);
+	const scene: Scene = Object.freeze({ layers, put, remove, items, itemOf, itemAt, layerElement, toDrawing, toScreen, close });
 	return Object.freeze({ ok: true as const, scene });
 }

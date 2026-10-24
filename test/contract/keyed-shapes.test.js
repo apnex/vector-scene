@@ -500,8 +500,9 @@ test("VS7: with no root, put and remove change the descriptions alone, as they w
 	assert.equal(headless.itemOf({}), null);
 });
 
-test("I3: the scene touches nothing of the platform outside VS1 -- an opening, puts that create, patch, move and replace, a removal, both conversions and close log exactly VS1's reads, once each, and VS7's calls in order", () => {
-	const { root, log } = recordingPlatform();
+test("I3: the scene touches nothing of the platform outside VS1 -- an opening, puts that create, patch, move and replace, a removal, itemAt, both conversions and close log exactly VS1's reads, once each, and VS7's calls in order", () => {
+	// the hit stack: a layer's element, then the removed item's group, then the held item's circle, then another layer's element, never read
+	const { root, log } = recordingPlatform({ hits: (x, y, made) => [made[0], made[3], made[6], made[1]] });
 	const opened = openScene({ root, layers: [{ name: "back", attrs: { id: "back" } }, { name: "items" }, { name: "free", foreign: true }] });
 	assert.equal(opened.ok, true);
 	const { scene } = opened;
@@ -510,6 +511,7 @@ test("I3: the scene touches nothing of the platform outside VS1 -- an opening, p
 	scene.put("items", "a", [{ tag: "g", attrs: { id: "a", class: "on" }, children: [{ tag: "rect" }, { tag: "path", attrs: { d: "M0 0" } }] }]);
 	scene.put("items", "b", [{ tag: "circle", attrs: { r: 2 } }], { before: "a" });
 	scene.remove("items", "a");
+	assert.deepEqual(scene.itemAt({ x: 3, y: 4 }), { layer: "items", key: "b", path: [0] });
 	assert.deepEqual(scene.toDrawing({ x: 12, y: 24 }), { x: 1, y: 2 });
 	assert.deepEqual(scene.toScreen({ x: 1, y: 2 }), { x: 12, y: 24 });
 	scene.close();
@@ -518,6 +520,7 @@ test("I3: the scene touches nothing of the platform outside VS1 -- an opening, p
 		// the opening: VS1's reads of the root and its document, once each, then each layer made, its attributes set, and appended
 		"root get ownerDocument",
 		"document get createElementNS",
+		"document get elementsFromPoint",
 		"root get appendChild",
 		"root get getScreenCTM",
 		"document.createElementNS(\"svg\", \"g\")",
@@ -559,6 +562,13 @@ test("I3: the scene touches nothing of the platform outside VS1 -- an opening, p
 		...method("e2", "insertBefore", "e7, e4"),
 		// a removal
 		...method("e4", "remove", ""),
+		// itemAt: the document's elementsFromPoint, read as the scene opened, called with the document and the point; the answer's length once, then its indices in order up to the first element of an item held, nothing of any element read
+		"document.elementsFromPoint(3, 4)",
+		"  -> a1",
+		"a1 get length",
+		"a1 get 0",
+		"a1 get 1",
+		"a1 get 2",
 		// toDrawing: the root's screen transform, its inverse, and a to f in order
 		"root.getScreenCTM()",
 		"  -> t1",

@@ -16,7 +16,7 @@ export interface ScenePoint {
 	readonly y: number;
 }
 
-/** What a conversion takes: an object whose x and y are finite numbers, read through ordinary access, so a point with getters answers. */
+/** What a conversion and itemAt take: an object whose x and y are finite numbers, read through ordinary access, so a point with getters answers. */
 export interface ScreenOrDrawingPoint {
 	readonly x: number;
 	readonly y: number;
@@ -52,9 +52,15 @@ export interface ElementSlice<E> {
 /** An element of plain objects' shape: the slice over elements of its own kind, the kind a root of plain objects, or none, makes. */
 export interface SceneElement extends ElementSlice<SceneElement> {}
 
-/** The root's document (VS1): the scene makes every element through it, in the SVG namespace. */
+/**
+ * The root's document (VS1): the scene makes every element through it, in the SVG namespace, and asks it
+ * which elements lie at a screen point (VS12) -- optional, a document holding none opening a scene whose
+ * itemAt refuses. Of the hit test's answer the scene reads its length and its indices, and of each element
+ * nothing but its identity.
+ */
 export interface SceneDocument<E extends ElementSlice<E> = SceneElement> {
 	createElementNS(namespace: string, tag: string): E;
+	elementsFromPoint?(x: number, y: number): readonly unknown[];
 }
 
 /** The root (VS1): the platform's element the scene draws into, an svg element in a browser. */
@@ -137,14 +143,14 @@ export interface SceneItem {
 	readonly shapes: readonly DescribedShape[];
 }
 
-/** Which shape an element belongs to (VS9): its layer, its item's key, and the path of indices from the item's own shapes down. */
+/** Which shape an element belongs to (VS9), or lies at a screen point (VS12): its layer, its item's key, and the path of indices from the item's own shapes down. */
 export interface ShapeAtElement {
 	readonly layer: string;
 	readonly key: string;
 	readonly path: readonly number[];
 }
 
-/** An open scene (VS3 to VS10), E the kind of element its root's document makes. */
+/** An open scene (VS3 to VS10, VS12), E the kind of element its root's document makes. */
 export interface Scene<E extends ElementSlice<E> = SceneElement> {
 	readonly layers: readonly SceneLayer[];
 	/** Makes `shapes` the description of item `key` in `layer`, placing it as `place` says (VS6, VS7). */
@@ -155,6 +161,8 @@ export interface Scene<E extends ElementSlice<E> = SceneElement> {
 	readonly items: (layer: string) => readonly SceneItem[];
 	/** The shape an element the scene made belongs to, or null (VS9). */
 	readonly itemOf: (value: unknown) => ShapeAtElement | null;
+	/** The shape of the first element the scene made for an item it holds in the platform's hit stack at a screen point, or null (VS12). */
+	readonly itemAt: (screen: ScreenOrDrawingPoint) => ShapeAtElement | null;
 	/** A foreign layer's element, which the application draws beneath (VS4). */
 	readonly layerElement: (name: string) => E;
 	/** Where a screen point lies in drawing coordinates (VS10). */

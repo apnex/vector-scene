@@ -6,9 +6,11 @@
  * descriptors of root and layers its own keys hold, in that order -- never a getter of it, an inherited
  * property absent, a symbol-named property ignored, a key whose descriptor reads undefined absent, and a
  * reflection that throws refusing the whole declaration, nothing further read. Then, when root's
- * descriptor holds an object, its ownerDocument, that document's createElementNS, and its own appendChild
- * and getScreenCTM, each through ordinary property access and judged as read, the reading of root stopping
- * at the first refused. Then layers, as an array is read, and each layer in index order, read whole before
+ * descriptor holds an object, its ownerDocument, that document's createElementNS and elementsFromPoint, and
+ * its own appendChild and getScreenCTM, each through ordinary property access and judged as read, the
+ * reading of root stopping at the first refused: elementsFromPoint is refused only when its getter throws,
+ * and a value that is no function is kept as none, so the root opens and itemAt refuses. Then layers, as an
+ * array is read, and each layer in index order, read whole before
  * the next: its prototype, its own keys, the descriptors of name, attrs and foreign its own keys hold, and,
  * unless it is refused at its own pointer, the values those held, attrs as an attribute record is read.
  * Nothing here calls a platform method.
@@ -21,11 +23,12 @@ import type { OpenSceneResult } from "./types.js";
 /** A platform method as read when the scene opens: the function, called with its object as receiver every time. */
 export type PlatformMethod = (...args: unknown[]) => unknown;
 
-/** The root and what the scene read of it as it opened (VS1). */
+/** The root and what the scene read of it as it opened (VS1); elementsFromPoint is null when the document held no function by that name. */
 export interface PlatformRoot {
 	readonly root: object;
 	readonly rootDocument: object;
 	readonly createElementNS: PlatformMethod;
+	readonly elementsFromPoint: PlatformMethod | null;
 	readonly appendChild: PlatformMethod;
 	readonly getScreenCTM: PlatformMethod;
 }
@@ -67,11 +70,21 @@ function readRoot(root: object): PlatformRoot | null {
 	const rootDocument = ownerDocument.value;
 	const createElementNS = readMember(rootDocument, "createElementNS");
 	if (!createElementNS.read || !isFunction(createElementNS.value)) return null;
+	// VS1 and VS12: optional, so only a getter that throws refuses the root; a value that is no function, undefined among them, is kept as none
+	const elementsFromPoint = readMember(rootDocument, "elementsFromPoint");
+	if (!elementsFromPoint.read) return null;
 	const appendChild = readMember(root, "appendChild");
 	if (!appendChild.read || !isFunction(appendChild.value)) return null;
 	const getScreenCTM = readMember(root, "getScreenCTM");
 	if (!getScreenCTM.read || !isFunction(getScreenCTM.value)) return null;
-	return { root, rootDocument, createElementNS: createElementNS.value, appendChild: appendChild.value, getScreenCTM: getScreenCTM.value };
+	return {
+		root,
+		rootDocument,
+		createElementNS: createElementNS.value,
+		elementsFromPoint: isFunction(elementsFromPoint.value) ? elementsFromPoint.value : null,
+		appendChild: appendChild.value,
+		getScreenCTM: getScreenCTM.value,
+	};
 }
 
 /** VS2 rule 2 and VS3: every problem a declaration has, or what a scene is opened from. Never throws. */

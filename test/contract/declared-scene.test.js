@@ -64,6 +64,14 @@ test("VS3 step 3, I1: root an accessor, not an object, a function, or lacking ea
 		member({ ownerDocument: () => 0 }),
 		member({ ownerDocument: {} }),
 		member({ ownerDocument: { createElementNS: "f" } }),
+		member({
+			ownerDocument: {
+				createElementNS() {},
+				get elementsFromPoint() {
+					throw new Error("elementsFromPoint's getter throws");
+				},
+			},
+		}),
 		member({ appendChild: undefined }),
 		member({ appendChild: {} }),
 		member({ getScreenCTM: undefined }),
@@ -80,6 +88,10 @@ test("VS3 step 3, I1: root an accessor, not an object, a function, or lacking ea
 	assert.deepEqual(problemsOf(Object.defineProperty({ layers }, "root", accessor())), ["invalid-value /root"], "an accessor root, no getter run");
 	const inherited = Object.create(goodRoot());
 	assert.equal(openScene({ root: inherited, layers }).ok, true, "a root's members are read through ordinary property access, a browser's being inherited");
+	for (const elementsFromPoint of [undefined, null, 5, "f", {}]) {
+		const { createElementNS } = fakeRoot().root.ownerDocument;
+		assert.equal(openScene({ root: member({ ownerDocument: { createElementNS, elementsFromPoint } }), layers }).ok, true, `a document's elementsFromPoint of ${String(elementsFromPoint)} is kept as none, and the root opens`);
+	}
 	const log = [];
 	const root = recorded({ ownerDocument: recorded({ createElementNS: 5 }, "document", log), appendChild() {}, getScreenCTM() {} }, "root", log);
 	assert.deepEqual(problemsOf({ root, layers: [{ name: "a", foreign: "no" }] }), ["invalid-value /layers/0/foreign", "invalid-value /root"]);
@@ -171,13 +183,14 @@ test("VS2 rule 2: a declaration is read breadth first -- its descriptors, the ro
 	const opened = openScene(declaration);
 	assert.equal(opened.ok, true);
 	const reads = log.filter((entry) => !entry.startsWith("root apply") && !entry.startsWith("document apply"));
-	assert.deepEqual(reads.slice(0, 26), [
+	assert.deepEqual(reads.slice(0, 27), [
 		"declaration getPrototypeOf",
 		"declaration ownKeys",
 		"declaration getOwnPropertyDescriptor root",
 		"declaration getOwnPropertyDescriptor layers",
 		"root get ownerDocument",
 		"document get createElementNS",
+		"document get elementsFromPoint",
 		"root get appendChild",
 		"root get getScreenCTM",
 		"layers getPrototypeOf",
@@ -199,7 +212,7 @@ test("VS2 rule 2: a declaration is read breadth first -- its descriptors, the ro
 		"layer1 getOwnPropertyDescriptor name",
 		"layer1 getOwnPropertyDescriptor foreign",
 	]);
-	assert.equal(reads.length, 26, "nothing of the declaration read again as the layers are made");
+	assert.equal(reads.length, 27, "nothing of the declaration read again as the layers are made");
 	const second = [];
 	const refusedLayer = recorded({ name: "a", attrs: recorded({ id: "x" }, "attrs", second), other: 1 }, "layer", second, {
 		ownKeys() {
@@ -365,7 +378,7 @@ test("VS3 lifecycle rule 5, I2: a close made from inside a removal calls nothing
 	assert.throws(() => scene.close(), (e) => e === putError && e.constructor === Error && e.message.startsWith("put: "));
 	assert.equal(inner, undefined);
 	assert.deepEqual(log, [["remove", 3], ["remove", 2], ["remove", 1]], "every removal still attempted");
-	for (const [fn, args] of [["items", ["items"]], ["remove", ["items", "a"]], ["itemOf", [{}]], ["layerElement", ["free"]], ["toDrawing", [{ x: 0, y: 0 }]], ["toScreen", [{ x: 0, y: 0 }]]]) {
+	for (const [fn, args] of [["items", ["items"]], ["remove", ["items", "a"]], ["itemOf", [{}]], ["itemAt", [{ x: 0, y: 0 }]], ["layerElement", ["free"]], ["toDrawing", [{ x: 0, y: 0 }]], ["toScreen", [{ x: 0, y: 0 }]]]) {
 		assert.throws(() => scene[fn](...args), (e) => e.constructor === Error && e.message.startsWith(`${fn}: `), `${fn} once closed`);
 	}
 });
@@ -374,9 +387,9 @@ test("VS3 lifecycle rule 4, I2: once closed, every function but close throws Err
 	for (const rootless of [false, true]) {
 		const { scene } = openScene(rootless ? { layers: LAYERS } : { root: goodRoot(), layers: LAYERS });
 		scene.close();
-		const calls = [["put", ["items", "a", [{ tag: "g" }]]], ["remove", ["items", "a"]], ["items", ["items"]], ["itemOf", [{}]], ["itemOf", [5]], ["layerElement", ["free"]], ["toDrawing", [{ x: 0, y: 0 }]], ["toScreen", [{ x: 0, y: 0 }]]];
+		const calls = [["put", ["items", "a", [{ tag: "g" }]]], ["remove", ["items", "a"]], ["items", ["items"]], ["itemOf", [{}]], ["itemOf", [5]], ["itemAt", [{ x: 0, y: 0 }]], ["layerElement", ["free"]], ["toDrawing", [{ x: 0, y: 0 }]], ["toScreen", [{ x: 0, y: 0 }]]];
 		for (const [fn, args] of calls) assert.throws(() => scene[fn](...args), (e) => e.constructor === Error && e.message.startsWith(`${fn}: `), `${fn}, rootless ${rootless}`);
-		const malformed = [["put", ["free", "a", [{ tag: "g" }]]], ["put", ["items", "", [{ tag: "g" }]]], ["put", ["items", "a", []]], ["put", ["items", "a", [{ tag: "g" }], null]], ["remove", ["items", 5]], ["items", [5]], ["layerElement", ["items"]], ["toDrawing", [{ x: NaN, y: 0 }]], ["toScreen", [5]]];
+		const malformed = [["put", ["free", "a", [{ tag: "g" }]]], ["put", ["items", "", [{ tag: "g" }]]], ["put", ["items", "a", []]], ["put", ["items", "a", [{ tag: "g" }], null]], ["remove", ["items", 5]], ["items", [5]], ["layerElement", ["items"]], ["toDrawing", [{ x: NaN, y: 0 }]], ["toScreen", [5]], ["itemAt", [{ x: 0, y: Infinity }]]];
 		for (const [fn, args] of malformed) assert.throws(() => scene[fn](...args), (e) => e.constructor === TypeError && e.message.startsWith(`${fn}: `), `${fn} malformed, rootless ${rootless}`);
 	}
 });
@@ -397,7 +410,7 @@ test("VS7, I2: a platform method throwing while a put or a removal writes fails 
 		else assert.throws(() => scene.remove("items", "a"), (e) => e === thrown);
 		assert.equal(log.length, 2, `${fn}: no further call once the platform threw`);
 		hooks.before = undefined;
-		for (const [name, args] of [["put", ["items", "b", [{ tag: "g" }]]], ["remove", ["items", "a"]], ["items", ["items"]], ["itemOf", [{}]], ["layerElement", ["free"]], ["toDrawing", [{ x: 0, y: 0 }]], ["toScreen", [{ x: 0, y: 0 }]]]) {
+		for (const [name, args] of [["put", ["items", "b", [{ tag: "g" }]]], ["remove", ["items", "a"]], ["items", ["items"]], ["itemOf", [{}]], ["itemAt", [{ x: 0, y: 0 }]], ["layerElement", ["free"]], ["toDrawing", [{ x: 0, y: 0 }]], ["toScreen", [{ x: 0, y: 0 }]]]) {
 			assert.throws(() => scene[name](...args), (e) => e.constructor === Error && e.message.startsWith(`${name}: `), `${fn}: ${name} on a failed scene`);
 		}
 		log.length = 0;
@@ -408,7 +421,7 @@ test("VS7, I2: a platform method throwing while a put or a removal writes fails 
 });
 
 test("VS3 lifecycle rule 4, I2: a platform method re-entering any function, close among them, while a put or a removal writes is refused with Error and changes nothing", () => {
-	const { root, log, hooks } = fakeRoot();
+	const { root, log, hooks } = fakeRoot(undefined, () => [root.children[1].children[0]]);
 	const { scene } = openScene({ root, layers: LAYERS });
 	scene.put("items", "a", [{ tag: "g" }]);
 	const element = root.children[1].children[0];
@@ -417,7 +430,7 @@ test("VS3 lifecycle rule 4, I2: a platform method re-entering any function, clos
 	hooks.before = (entry) => {
 		if (!armed || entry[0] !== "set") return;
 		armed = false;
-		const attempts = [["put", ["items", "x", [{ tag: "g" }]]], ["remove", ["items", "a"]], ["items", ["items"]], ["itemOf", [element]], ["layerElement", ["free"]], ["toDrawing", [{ x: 0, y: 0 }]], ["toScreen", [{ x: 0, y: 0 }]], ["close", []]];
+		const attempts = [["put", ["items", "x", [{ tag: "g" }]]], ["remove", ["items", "a"]], ["items", ["items"]], ["itemOf", [element]], ["itemAt", [{ x: 0, y: 0 }]], ["layerElement", ["free"]], ["toDrawing", [{ x: 0, y: 0 }]], ["toScreen", [{ x: 0, y: 0 }]], ["close", []]];
 		for (const [fn, args] of attempts) {
 			try {
 				scene[fn](...args);
@@ -429,7 +442,7 @@ test("VS3 lifecycle rule 4, I2: a platform method re-entering any function, clos
 	};
 	log.length = 0;
 	scene.put("items", "a", [{ tag: "g", attrs: { id: "a" } }]);
-	assert.deepEqual(refusals, ["put", "remove", "items", "itemOf", "layerElement", "toDrawing", "toScreen", "close"]);
+	assert.deepEqual(refusals, ["put", "remove", "items", "itemOf", "itemAt", "layerElement", "toDrawing", "toScreen", "close"]);
 	assert.deepEqual(log, [["set", element.serial, "id", "a"]], "the refused calls made no platform call");
 	assert.deepEqual(scene.items("items"), [{ key: "a", shapes: [{ tag: "g", attrs: { id: "a" } }] }]);
 	assert.deepEqual(scene.itemOf(element), { layer: "items", key: "a", path: [0] }, "still open");

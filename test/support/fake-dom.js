@@ -97,9 +97,19 @@ function detach(node) {
 	node.parent = null;
 }
 
-/** A fake root: an svg element of a fake document, with the platform members the scene reads. */
-export function fakeRoot(ctm = { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20 }) {
+/**
+ * A fake root: an svg element of a fake document, with the platform members the scene reads. With `hits`,
+ * the document also holds elementsFromPoint, which logs ["hits", x, y] and answers `hits(x, y)`; without it,
+ * the document holds only createElementNS, as 0.1.0's slice did.
+ */
+export function fakeRoot(ctm = { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20 }, hits = null) {
 	const document = fakeDocument();
+	if (hits !== null) {
+		document.elementsFromPoint = (x, y) => {
+			document.log.push(["hits", x, y]);
+			return hits(x, y);
+		};
+	}
 	const root = fakeElement("svg", 0, document.log, document.hooks);
 	root.ownerDocument = document;
 	root.ctm = ctm;

@@ -7,12 +7,18 @@
 const SVG = "http://www.w3.org/2000/svg";
 const TRAPS = ["getPrototypeOf", "setPrototypeOf", "isExtensible", "preventExtensions", "getOwnPropertyDescriptor", "defineProperty", "has", "get", "set", "deleteProperty", "ownKeys", "apply", "construct"];
 
-/** A recording platform: `ctm` is the screen transform's six numbers, and `transformFor` may answer one of another shape. */
-export function recordingPlatform({ ctm = { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20 } } = {}) {
+/**
+ * A recording platform: `ctm` is the screen transform's six numbers. With `hits`, the document holds
+ * elementsFromPoint, which logs its call -- naming its receiver, `document` when it is the document -- and
+ * answers a recorded array of what `hits(x, y, elements)` answers, `elements` the elements made so far, in
+ * the order made; without it, the document holds no such member, as a fake document of 0.1.0's slice.
+ */
+export function recordingPlatform({ ctm = { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20 }, hits = null } = {}) {
 	const log = [];
 	const labels = new WeakMap();
 	const nameOf = (value) => (typeof value === "object" && value !== null && labels.has(value) ? labels.get(value) : JSON.stringify(value));
-	let elements = 0, transforms = 0;
+	let elements = 0, transforms = 0, answers = 0;
+	const made = [];
 
 	/** A Proxy of `target` labelled `label`, logging each trap as `<label> <trap>[ <key>]`. */
 	const recorded = (target, label) => {
@@ -57,7 +63,9 @@ export function recordingPlatform({ ctm = { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20
 			textContent: "",
 		};
 		void tag;
-		return recorded(target, label);
+		const element = recorded(target, label);
+		made.push(element);
+		return element;
 	};
 
 	const makeTransform = ({ a, b, c, d, e, f }) => {
@@ -80,14 +88,23 @@ export function recordingPlatform({ ctm = { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20
 		return recorded(target, label);
 	};
 
-	const document = recorded({
+	const documentTarget = {
 		createElementNS(namespace, tag) {
 			const element = makeElement(tag);
 			call("document", "createElementNS", [namespace === SVG ? "svg" : namespace, tag]);
 			log.push(`  -> ${nameOf(element)}`);
 			return element;
 		},
-	}, "document");
+	};
+	if (hits !== null) {
+		documentTarget.elementsFromPoint = function (...args) {
+			const answer = recorded(hits(args[0], args[1], [...made]), `a${++answers}`);
+			call(this === document ? "document" : nameOf(this), "elementsFromPoint", args);
+			log.push(`  -> ${nameOf(answer)}`);
+			return answer;
+		};
+	}
+	const document = recorded(documentTarget, "document");
 
 	const root = recorded({
 		ownerDocument: document,

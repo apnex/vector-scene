@@ -3,13 +3,14 @@
 // browser's SVG element is passed as the root, and the elements its document makes are what layerElement
 // answers; an items answer's shapes are passed back to put; plain objects of the slice's shape, and no root,
 // type-check too. Each line marked as an expected error must fail to compile, or the compile fails.
-import { openScene, type DescribedShape, type ElementSlice, type OpenSceneResult, type Scene, type SceneDeclaration, type SceneElement, type SceneItem, type SceneLayer, type SceneMatrix, type ScenePoint, type SceneRoot, type Shape, type ShapeAtElement } from "@apnex/vector-scene";
+import { openScene, type DescribedShape, type ElementSlice, type OpenSceneResult, type Scene, type SceneDeclaration, type SceneDocument, type SceneElement, type SceneItem, type SceneLayer, type SceneMatrix, type ScenePoint, type SceneRoot, type Shape, type ShapeAtElement } from "@apnex/vector-scene";
 
 declare const svg: SVGSVGElement;
 declare const event: PointerEvent;
 
-// A browser's svg element is a root, its document making Elements.
+// A browser's svg element is a root, its document making Elements and answering elementsFromPoint.
 const browserRoot: SceneRoot<Element> = svg;
+const browserDocument: SceneDocument<Element> = svg.ownerDocument;
 const matrix: SceneMatrix | null = svg.getScreenCTM();
 
 const opened = openScene({ root: svg, layers: [{ name: "back", attrs: { id: "back", opacity: 0.5 } }, { name: "items" }, { name: "pipes", foreign: true }] });
@@ -44,6 +45,13 @@ if (opened.ok) {
 	// The element a pointer event targets is asked of by identity.
 	const at: ShapeAtElement | null = scene.itemOf(event.target);
 	const path: readonly number[] = at === null ? [] : at.path;
+
+	// The item at a screen point is asked of by the point, a captured pointer's among them.
+	const under: ShapeAtElement | null = scene.itemAt({ x: event.clientX, y: event.clientY });
+	const hit: ShapeAtElement | null = scene.itemOf(event.target) ?? scene.itemAt(new DOMPoint(event.clientX, event.clientY));
+	void [under, hit];
+	// @ts-expect-error -- itemAt takes a point, not an element
+	scene.itemAt(event.target);
 
 	// Conversions take a DOMPoint, or any point, and answer a frozen point.
 	const drawing: ScenePoint = scene.toDrawing(new DOMPoint(event.clientX, event.clientY));
@@ -84,8 +92,13 @@ opened.ok && opened.scene.put("items", "a");
 // @ts-expect-error -- a place's before is a string or null
 opened.ok && opened.scene.put("items", "a", [{ tag: "g" }], { before: 5 });
 
-// A root of plain objects of the slice's shape, and no root at all: E is SceneElement.
+// A root of plain objects of the slice's shape, its document with or without elementsFromPoint, and no root at all: E is SceneElement.
 declare const plainRoot: SceneRoot;
+declare const plainElement: SceneElement;
+const withoutHits: SceneDocument = { createElementNS: () => plainElement };
+const withHits: SceneDocument = { createElementNS: () => plainElement, elementsFromPoint: () => [plainElement] };
+// @ts-expect-error -- a document's elementsFromPoint answers an array
+const badHits: SceneDocument = { createElementNS: () => plainElement, elementsFromPoint: () => 5 };
 const plain: OpenSceneResult = openScene({ root: plainRoot, layers: [{ name: "a" }] });
 const rootless: OpenSceneResult<SceneElement> = openScene({ layers: [{ name: "a", foreign: false }] });
 const declaration: SceneDeclaration = { layers: [{ name: "a" }] };
@@ -112,4 +125,4 @@ openScene({ root: window, layers: [{ name: "a" }] });
 // @ts-expect-error -- layers is required
 openScene({ root: svg });
 
-void [browserRoot, matrix, both, nestedBoth, badValue, noTag, plain, rootless];
+void [browserRoot, browserDocument, matrix, both, nestedBoth, badValue, noTag, plain, rootless, withoutHits, withHits, badHits];

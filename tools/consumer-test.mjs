@@ -9,8 +9,9 @@
 // each export's address carrying the package's version. In Node and in the page alike, the exercise
 // below opens a scene, puts an item, reads it back and puts the description again: in Node with no root,
 // the scene holding data alone; and in the page on an <svg> element, where it also finds the element the
-// scene made for a shape by itemOf, converts a point -- held to DOMPoint's matrixTransform over the
-// element's own screen transform -- and closes, the root left as it found it.
+// scene made for a shape by itemOf, and again by itemAt at its centre on the screen, converts a point --
+// held to DOMPoint's matrixTransform over the element's own screen transform -- and closes, the root left
+// as it found it.
 //
 // Chrome is $CHROME, or google-chrome on PATH. It runs with a profile of its own in a scratch directory,
 // so it never touches another Chrome on the machine, detached in a process group of its own that is killed
@@ -112,8 +113,12 @@ function exercise(openScene, platform) {
 		const point = scene.toDrawing({ x: 50, y: 30 });
 		const expected = new DOMPoint(50, 30).matrixTransform(platform.root.getScreenCTM().inverse());
 		if (!Object.is(point.x, expected.x) || !Object.is(point.y, expected.y)) wrong.push("toDrawing answered " + JSON.stringify(point) + " where DOMPoint answers " + JSON.stringify([expected.x, expected.y]));
+		const box = text.getBoundingClientRect();
+		const under = scene.itemAt({ x: box.left + box.width / 2, y: box.top + box.height / 2 });
+		if (!under || under.key !== "first" || JSON.stringify(under.path) !== "[0,0]") wrong.push("itemAt answered " + JSON.stringify(under));
+		if (scene.itemAt({ x: 1, y: 1 }) !== null) wrong.push("itemAt answered beyond the root");
 		if (scene.close() !== undefined || platform.root.innerHTML !== platform.found) wrong.push("close left " + platform.root.innerHTML);
-		done.push("found its element at " + JSON.stringify(at && at.path), "converted (50,30) to (" + point.x + "," + point.y + ")", "closed");
+		done.push("found its element at " + JSON.stringify(at && at.path), "found it at its point too", "converted (50,30) to (" + point.x + "," + point.y + ")", "closed");
 	} else {
 		if (scene.itemOf({}) !== null) wrong.push("itemOf answered for an object the scene did not make");
 		let refused = "";

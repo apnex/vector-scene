@@ -14,16 +14,19 @@ import { describe, isFrozenToDepth } from "../support/frozen.js";
 import { recorded, revoked, trapping } from "../support/recording-proxy.js";
 
 const LAYERS = [{ name: "items" }, { name: "free", foreign: true }];
-const SCENE_KEYS = ["layers", "put", "remove", "items", "itemOf", "layerElement", "toDrawing", "toScreen", "close"];
+const SCENE_KEYS = ["layers", "put", "remove", "items", "itemOf", "itemAt", "layerElement", "toDrawing", "toScreen", "close"];
 const isTypeError = (fn) => (e) => Object.getPrototypeOf(e) === TypeError.prototype && e.message.startsWith(`${fn}: `);
 const isBaseError = (fn) => (e) => Object.getPrototypeOf(e) === Error.prototype && e.message.startsWith(`${fn}: `);
 /** A value every trap of which fails the test: an argument beyond a function's form, which must never be read. */
 const unread = () => new Proxy({}, new Proxy({}, { get: () => () => assert.fail("an argument beyond the form was read") }));
 
+/** A rooted scene over a fake platform whose hit test answers the items layer's elements, topmost first. */
 function rooted() {
-	const platform = fakeRoot();
+	let items = null;
+	const platform = fakeRoot(undefined, () => [...items.children].reverse());
 	const { scene } = openScene({ root: platform.root, layers: LAYERS });
-	return { ...platform, scene, items: platform.root.children[0] };
+	items = platform.root.children[0];
+	return { ...platform, scene, items };
 }
 
 test("Errors: openScene never throws while it reads and judges a declaration, whatever its getters and traps do", () => {
@@ -69,6 +72,9 @@ test("Errors: each function's malformed argument is a TypeError beginning with i
 		["toDrawing", [null]],
 		["toDrawing", [{ x: 1, y: "2" }]],
 		["toScreen", [[1, 2]]],
+		["itemAt", [null]],
+		["itemAt", [{ x: 1, y: NaN }]],
+		["itemAt", [() => ({ x: 1, y: 2 })]],
 	];
 	for (const [fn, args] of cases) assert.throws(() => scene[fn](...args), isTypeError(fn), `${fn} ${describe(args)}`);
 });
@@ -105,6 +111,7 @@ test("Errors: an error a getter or a trap threw while an argument is read is ret
 		assert.throws(() => scene.put("items", "a", [{ tag: "g", attrs: throwingTrap(thrown) }]), (e) => isTypeError("put")(e) && e.message.endsWith(`could not be read: ${name}`), `attrs, ${name}`);
 		assert.throws(() => scene.put("items", "a", [{ tag: "g" }], throwingTrap(thrown)), (e) => isTypeError("put")(e) && e.message.endsWith(`could not be read: ${name}`), `place, ${name}`);
 		assert.throws(() => scene.toDrawing(throwingPoint(thrown)), (e) => isTypeError("toDrawing")(e) && e.message.endsWith(`could not be read: ${name}`), `toDrawing, ${name}`);
+		assert.throws(() => scene.itemAt(throwingPoint(thrown)), (e) => isTypeError("itemAt")(e) && e.message.endsWith(`could not be read: ${name}`), `itemAt, ${name}`);
 	}
 	assert.deepEqual(trapLog, [], "no trap of the thrown Proxy ran");
 	assert.equal(read, false, "neither the thrown object's message nor its string form was read");
@@ -116,8 +123,10 @@ test("Errors: a call the scene's state does not allow is an Error of the base co
 	const rootless = openScene({ layers: LAYERS }).scene;
 	assert.throws(() => rootless.layerElement("free"), isBaseError("layerElement"));
 	assert.throws(() => rootless.toScreen({ x: 0, y: 0 }), isBaseError("toScreen"));
+	assert.throws(() => rootless.itemAt({ x: 0, y: 0 }), isBaseError("itemAt"));
+	assert.throws(() => openScene({ root: fakeRoot().root, layers: LAYERS }).scene.itemAt({ x: 0, y: 0 }), isBaseError("itemAt"), "a root whose document held no elementsFromPoint");
 	scene.close();
-	for (const [fn, args] of [["put", ["items", "a", [{ tag: "g" }]]], ["remove", ["items", "a"]], ["items", ["items"]], ["itemOf", [null]], ["layerElement", ["free"]], ["toDrawing", [{ x: 0, y: 0 }]], ["toScreen", [{ x: 0, y: 0 }]]]) {
+	for (const [fn, args] of [["put", ["items", "a", [{ tag: "g" }]]], ["remove", ["items", "a"]], ["items", ["items"]], ["itemOf", [null]], ["itemAt", [{ x: 0, y: 0 }]], ["layerElement", ["free"]], ["toDrawing", [{ x: 0, y: 0 }]], ["toScreen", [{ x: 0, y: 0 }]]]) {
 		assert.throws(() => scene[fn](...args), isBaseError(fn), fn);
 	}
 });
@@ -221,6 +230,11 @@ test("What is returned: every value the scene makes is made afresh by the call t
 	const at = scene.itemOf(items.children[0]);
 	assert.ok(isFrozenToDepth(at));
 	assert.notEqual(scene.itemOf(items.children[0]), at);
+	const under = scene.itemAt({ x: 1, y: 2 });
+	assert.deepEqual(under, at);
+	assert.ok(isFrozenToDepth(under));
+	assert.notEqual(scene.itemAt({ x: 1, y: 2 }), under);
+	assert.notEqual(scene.itemAt({ x: 1, y: 2 }).path, under.path);
 	const point = scene.toDrawing({ x: 1, y: 2 });
 	assert.ok(isFrozenToDepth(point));
 	assert.notEqual(scene.toDrawing({ x: 1, y: 2 }), point);
@@ -259,6 +273,7 @@ test("What is returned: every record holds its properties in its written order a
 	assert.deepEqual(Reflect.ownKeys(item.shapes[0]), ["tag", "attrs"]);
 	assert.deepEqual(Reflect.ownKeys(item.shapes[0].attrs), ["b", "a"]);
 	assert.deepEqual(Reflect.ownKeys(scene.itemOf(items.children[0])), ["layer", "key", "path"]);
+	assert.deepEqual(Reflect.ownKeys(scene.itemAt({ x: 0, y: 0 })), ["layer", "key", "path"]);
 	assert.deepEqual(Reflect.ownKeys(scene.toScreen({ x: 0, y: 0 })), ["x", "y"]);
 	assert.deepEqual(Reflect.ownKeys(scene.items("items")), ["0", "length"]);
 	assert.equal(Object.getPrototypeOf(item.shapes[0]), Object.prototype);
@@ -276,11 +291,12 @@ test("What is returned: put, remove and close return undefined", () => {
 
 test("What is returned: no function the scene makes needs a receiver, and none reads an argument beyond those its form names", () => {
 	const { scene, items } = rooted();
-	const { put, remove, items: itemsOf, itemOf, layerElement, toDrawing, toScreen, close } = scene;
+	const { put, remove, items: itemsOf, itemOf, itemAt, layerElement, toDrawing, toScreen, close } = scene;
 	assert.equal(put("items", "a", [{ tag: "g" }], {}, unread()), undefined);
 	assert.equal(Reflect.apply(put, { not: "the scene" }, ["items", "b", [{ tag: "g" }]]), undefined);
 	assert.deepEqual(itemsOf("items", unread()).map((item) => item.key), ["a", "b"]);
 	assert.deepEqual(itemOf(items.children[0], unread()), { layer: "items", key: "a", path: [0] });
+	assert.deepEqual(Reflect.apply(itemAt, undefined, [{ x: 0, y: 0 }, unread()]), { layer: "items", key: "b", path: [0] });
 	assert.equal(layerElement("free", unread()), scene.layerElement("free"));
 	assert.deepEqual(toDrawing({ x: 12, y: 24 }, unread()), { x: 1, y: 2 });
 	assert.deepEqual(Reflect.apply(toScreen, null, [{ x: 1, y: 2 }, unread()]), { x: 12, y: 24 });
@@ -303,6 +319,7 @@ test("What is returned: nothing the application passes is kept, frozen or change
 	const point = { x: 1, y: 2 };
 	scene.put("items", "a", shapes, place);
 	scene.toDrawing(point);
+	scene.itemAt(point);
 	for (const value of [attrs, child, shapes, shapes[0], place, point]) assert.ok(!Object.isFrozen(value), describe(value));
 	assert.deepEqual(shapes, [{ tag: "g", attrs: { a: 1 }, children: [{ tag: "text", text: "t" }] }], "unchanged: a number not rewritten as a string");
 	attrs.a = 2;
