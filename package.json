@@ -1,6 +1,6 @@
 {
   "name": "@apnex/vector-scene",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Show an application's shapes, held as data in declared layers under its keys, exactly as described, and say which shape a platform element belongs to and where a point lies.",
   "license": "MIT",
   "author": "apnex",

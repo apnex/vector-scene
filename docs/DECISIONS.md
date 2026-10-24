@@ -95,3 +95,71 @@ Bytes as shipped, comments included, then with comments removed, each also gzipp
 | `reflection.js` | 5,569 | 1,853 | 3,113 | 931 |
 | `argument-reading.js`, `conversion.js`, `declaration-problems.js`, `index.js`, `types.js` | 10,413 | 4,148 | 5,653 | 2,046 |
 | every built module | 50,859 | 16,081 | 34,811 | 9,852 |
+
+---
+
+## D3 - The contract of record for 0.2.0 is draw's ratified RELEASES-0.2.md, revision 4
+
+**Ruled by:** the director, 2026-10-24 (draw's `H26-14`, every decision RD1 to RD19 at its recommendation).\
+**Affects:** `CONTRACT.md`, `README.md`, `src/`, `test/`, `tools/`, `export-map.json` and `package.json`.
+
+**Ruling.**\
+The contract of record for `0.2.0` is section 3.3 of draw's `dev/design/components/RELEASES-0.2.md`, revision 4, with what its section 3.5 gives every component -- the contract freed of draw's files and design (RD15), the consumer reference (RD16), the gate's checks of B424 stated for this component (RD13), and the vocabulary list renamed -- under its guardrails GR1 to GR5.\
+`CONTRACT.md` carries VS1 and VS2 widened by the document's `elementsFromPoint`, VS12 (`itemAt`, RD10), VS13 (the root's attributes the application's, RD11), the scene's ten keys, the capability row `shape-at-point`, the new fit criterion and Edges sentence, and I13 to I15 as the design gives them, each rule stated on its own terms with one provenance line under Reference.\
+D2 stands for everything `0.2.0` leaves unchanged.
+
+**Choices made at build.**\
+Where section 3.3 was silent or left a choice open, the build made these; each a test can hold is held by one:
+- `elementsFromPoint` is read by the same guarded ordinary access as the root's other members (`readMember` in `src/declaration-reading.ts`); a read that throws refuses the root, a value that is no function is kept as `null`, and the function kept is the one each `itemAt` calls.
+- The walk of the hit stack is its own module, `src/shape-at-point.ts`, named for the capability; it reads the answer through ordinary access, `length` once and then each index by number, and passes over a primitive without looking it up, since only an object or a function can be an element the scene made.
+- `itemAt` refuses a scene with no root before one whose document held no `elementsFromPoint`, so a scene with no root says so whatever it was opened from; step 5 judges `state` alone, since a scene cannot be writing there, a write being finished before any getter of the answer can run.
+- `itemAt` and `itemOf` share one function that makes the frozen `{ layer, key, path }` from an element's record, so the two answer the same record for the same element.
+- The types: `SceneDocument` gains `elementsFromPoint?(x: number, y: number): readonly unknown[]`, optional, so a browser's `Document` and a document of plain objects with or without it are each assignable; `Scene` gains `itemAt: (screen: ScreenOrDrawingPoint) => ShapeAtElement | null` after `itemOf`. I11's consumer passes `svg.ownerDocument` as a `SceneDocument<Element>`, calls `itemOf(target) ?? itemAt(point)`, and expects errors for an element given to `itemAt` and for an `elementsFromPoint` answering no array.
+- The vocabulary gains "hit stack", the words VS12's source uses for the platform's answer.
+- The design names the new fit criterion "a new row"; the table of the wrong tool lists only where to reach elsewhere, so the criterion -- what lies under a captured pointer, `itemAt` -- is a line of "Does my project want this at all?" instead.
+- I3's recording platform answers `itemAt` from a recorded hit stack, and I3's sentence names `itemAt` and the hit stack, since VS1 now holds both; its log holds the document's `elementsFromPoint` read as the scene opens, the call with the document and the point, and the answer's `length` and indices up to the first held element.
+- I13 is `test/contract/shape-at-point.test.js`, over the fake platform with a document whose `elementsFromPoint` records its receiver and arguments, and recording proxies for each order; `test/support/fake-dom.js`'s `fakeRoot` takes an optional hit test, and without one its document holds `createElementNS` alone, as draw's harness's does.
+- I14 is `test/browser/captured-pointer.test.js` and its page `test/browser/i14-page.html`, beside I10's, launching its own Chrome through `test/browser/chrome-driver.js`. The root lies 30 pixels right and 40 down, 400 by 300 pixels showing a `viewBox` of 200 by 150; two scene layers hold the items, a third, declared `pointer-events` `none`, lies over one of them, and a foreign layer receives an opaque rect over another. The press that takes the pointer calls the root's `setPointerCapture`, as `input-capture`'s `takePointer` takes it, and seven trusted moves with the button held follow: over a nested shape, its group's other shape, the high layer's item, the item beneath the veil, the ground and beyond the root. The grid is 14 by 11 presses over the root and 15 pixels around it, before the foreign rect is drawn. The `viewBox` is set to `60 0 100 75` after the scene has converted under the first, so a transform cached at the first conversion fails it (M13 below).
+- I15 is `test/contract/beside-0.1.0.test.js`, against the `0.1.0` release's built modules kept in `test/fixtures/v0.1.0/`, byte for byte: they were taken from the release's tarball as npm's cache holds it, whose SHA-512 is the integrity draw's `package-lock.json` records for the `v0.1.0` release file, and they equal draw's installed copy file by file; the source maps and declarations are left out, since no test reads them. Its tables are VS3's declarations, I1's cases among them; VS2 rule 2's order through recording proxies; three seeds of 150 generated calls on a rooted and a rootless scene, with every platform call, every `items` answer, `itemOf` of every element ever made and conversions; Errors, each malformed argument, a throw at each call of opening, a scene failed while writing and re-entered, a closed one, elements lacking methods; VS10 over recorded transforms; and I3's recording platform. Each answer is transcribed -- every key, value, prototype and frozen flag, each error's constructor and whole message -- with every log, and the two transcripts must be equal once `itemAt` is taken from the scene's keys, checked to stand after `itemOf`, and the read of `elementsFromPoint` from the logs, checked to stand directly after `createElementNS`; each is counted, and a root whose `elementsFromPoint` getter throws is held apart.
+- The runtime check's `PLATFORM_SLICE` holds `elementsFromPoint` in the document's row (B424, RD13); `test/tools/gate-checks.test.js` holds the control -- a built file naming it by dot, by brackets, by destructuring or through `Reflect.apply`, and the build itself, passes -- and the falsifier -- `elementFromPoint` named in any of three forms, and planted in a copy of the built `shape-at-point.js`, fails. The check's other passes and the release workflow's retried lookup of the draft were already this repository's, so section 3.5's table asks nothing more of it.
+- The consumer test's page also asks `itemAt` at the centre of the element it made, and beyond the root, so the packed release is held to VS12 in Chrome through an import map.
+- The README's consumer reference states, beside VS12's traps, one the guide states for a strict browser rule: a `style` attribute written by script is refused under `style-src 'self'`, so a shape's look is given by a class or presentation attributes, the scene writing every attribute with `setAttribute`.
+- The vocabulary lists are renamed as section 3.5 says: `gesture-tester` is `input-tester`, its words `keyboard` and `keycap` kept; the tester has no source yet, so no noun of its own joins them. No word of either list is needed, so no allowance is asked.
+
+**Errata against draw's design** (`RELEASES-0.2.md` revision 4, section 3.3):
+1. GR1 holds a `0.1.0` root to `0.1.0`'s every read but for the changes the closing paragraph lists, and the paragraph lists the refused root whose `elementsFromPoint` getter throws but not the read that refuses it, which every opening with a root now makes -- seen only by a getter or a `Proxy` on the document. The build makes the read VS1 and VS2 rule 2 require; I15 takes it as part of the first listed change, as `input-capture`'s closing paragraph lists its `timeStamp` read with its refusal, and `CONTRACT.md`'s closing paragraph says so. The paragraph should list: "the root's document's `elementsFromPoint` is read once as the scene opens".
+2. The design calls the new fit criterion "a new row", where the only table lists the wrong tool; it is placed as a line of the list above the table, as the choices record.
+
+**Mutants planted (GR2).**\
+Each mutant was planted in a copy of this repository by an exact replacement of one span of source, built, and run against the tests of the rule it breaks; each failed them, so each new rule's tests can fail:
+- M1, VS2 rule 2 -- a throwing `elementsFromPoint` getter kept as none, the root opened: 3 tests failed, I13's refusal, I1's table of roots and I15's listed change.
+- M2, VS2 rule 2 -- `elementsFromPoint` read after `getScreenCTM`: 6 failed, VS2 rule 2's order, I3, I13's two order tests and two of I15.
+- M3, VS1 -- a value that is no function refusing the root: 19 failed, I13's opening, every I15 table, and every test that opens a scene on the fake platform without a hit test.
+- M4, VS12 steps 1 and 2 -- the state judged before the point: 2 failed, I13's state test and I2's closed scene meeting the `TypeError` first.
+- M5, VS12 step 5 -- the second judgement of the state removed: 1 failed, I13's getter that closes or fails the scene.
+- M6, VS12 step 4 -- `length` read again on every index: 4 failed, I13's `length` once, its appending getter and its closing getter, and I3's log.
+- M7, VS12 step 4 -- the walk stopping at the first element of any kind, so the topmost hit: 6 failed, among them I13's looking through foreign content and I14's opaque foreign element in Chrome.
+- M8, VS12 step 3 -- any object accepted for `Array.isArray`: 1 failed, I13's answers that are no array.
+- M9, VS1 and VS12 step 3 -- `elementsFromPoint` called with no receiver: 7 failed, I13's receiver, I3, and all four of I14's tests, Chrome's own method refusing a call without its document.
+- M10, VS12 step 3 -- the point's `y` passed for `x`: 7 failed, I13's arguments, I3, and all four of I14's tests.
+- M11, the scene's form -- `itemAt` placed after `layerElement`: 3 failed, the record keys test and two of I15.
+- M12, VS12 step 4 -- an element of a removed item still known: 3 failed, I13's removed item and its removing getter, and I3.
+- M13, VS13 -- each scene's first screen transform cached and used for every later conversion: 1 failed, I14's `viewBox` set after opening; it survived the first I14, which never converted before the `viewBox` changed, and the test was strengthened.
+- M14, B424 -- `elementsFromPoint` taken out of the runtime check's document row: 3 failed, the slice, the control, and the check over the build.
+- M15, B424 -- `elementFromPoint` added to the document row: 2 failed, the slice and the falsifier.
+- M16, GR1 -- the message of a closed scene's refusal reworded past its beginning, which no other test pins: 1 failed, I15's Errors table.
+- M17, GR1 -- `elementsFromPoint` read before `createElementNS`: 4 failed, two of I15 and two of I13.
+
+**Built size.**\
+Measured by `tools/measure-size.mjs` over `dist/` as built for `0.2.0`, as D2 measured `0.1.0`: every built module is loaded wherever `openScene` is imported.\
+Bytes as shipped, comments included, then with comments removed, each also gzipped at level 9:
+
+| Files | Bytes | Gzip | No comments | Gzip |
+|---|---|---|---|---|
+| `open-scene.js` | 15,154 | 4,057 | 11,421 | 2,749 |
+| `declaration-reading.js` | 8,147 | 2,265 | 5,688 | 1,375 |
+| `shape-reading.js` | 7,669 | 2,522 | 5,194 | 1,652 |
+| `scene-writing.js` | 5,849 | 1,695 | 4,919 | 1,313 |
+| `reflection.js` | 5,569 | 1,853 | 3,113 | 931 |
+| `argument-reading.js`, `conversion.js`, `declaration-problems.js`, `index.js`, `shape-at-point.js`, `types.js` | 12,473 | 5,105 | 6,524 | 2,478 |
+| every built module | 54,861 | 17,497 | 36,859 | 10,498 |

@@ -73,7 +73,7 @@ test("the package declares no dependency, and pins TypeScript", () => {
 	assert.equal(pkg.type, "module");
 	assert.equal(pkg.engines.node, ">=22");
 	assert.equal(pkg.name, "@apnex/vector-scene");
-	assert.equal(pkg.version, "0.1.0");
+	assert.equal(pkg.version, "0.2.0");
 	assert.equal(pkg.repository.url, "git+https://github.com/apnex/vector-scene.git");
 	assert.deepEqual(pkg.files.sort(), ["CONTRACT.md", "LICENSE", "README.md", "VISION.md", "dist"]);
 });
