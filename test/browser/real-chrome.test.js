@@ -7,7 +7,7 @@
 // toScreen equal DOMPoint's matrixTransform over the root's screen transform for thousands of points; and
 // close leaves the root as found.
 //
-// The gate runs it on every push, under test-harness's runner: Chrome is test-harness's launchChrome, in a
+// The gate runs it on every push, under clean-runner's runner: Chrome is headless-chromium's launchChrome, in a
 // folder of its own with a debugging port the system gives it, driven through its connectToPage over
 // Node.js's global WebSocket; the page and the built files are served by its serveStatic.
 //
@@ -20,7 +20,7 @@ import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
-import { connectToPage, launchChrome, serveStatic } from "@apnex/test-harness";
+import { connectToPage, launchChrome, serveStatic } from "@apnex/headless-chromium";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 

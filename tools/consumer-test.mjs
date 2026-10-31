@@ -13,10 +13,10 @@
 // held to DOMPoint's matrixTransform over the element's own screen transform -- and closes, the root left
 // as it found it.
 //
-// The server, the one-shot Chrome and the scratch folder are test-harness's (a development dependency,
-// pinned to its release file, which nothing the package ships holds): serveStatic, dumpDom -- $CHROME, or
+// The server and the one-shot Chrome are headless-chromium's, the scratch folder clean-runner's (development
+// dependencies, pinned to their release files, which nothing the package ships holds): serveStatic, dumpDom -- $CHROME, or
 // a Chrome on PATH, in a folder of its own, gone with everything it made -- and scratchFolder, removed
-// however this test ends. `npm run consumer` runs it under test-harness's runner, which fails on anything
+// however this test ends. `npm run consumer` runs it under clean-runner's runner, which fails on anything
 // it leaves behind.
 //
 // Usage:  node tools/consumer-test.mjs [--tarball FILE]    (or VECTOR_SCENE_TARBALL=FILE)
@@ -26,7 +26,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { dumpDom, findChrome, scratchFolder, serveStatic } from "@apnex/test-harness";
+import { scratchFolder } from "@apnex/clean-runner";
+import { dumpDom, findChrome, serveStatic } from "@apnex/headless-chromium";
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

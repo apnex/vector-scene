@@ -7,7 +7,7 @@
 // foreign element above an item, itemAt answers the item and itemOf null; and a viewBox the application sets
 // after opening is followed by toDrawing, toScreen and itemAt.
 //
-// Chrome is launched and torn down as I10's test launches it, through test-harness, and the same guards hold:
+// Chrome is launched and torn down as I10's test launches it, through headless-chromium, and the same guards hold:
 // every test and hook has a timeout, and the cleanup can neither fail the run nor leave a handle holding it open.
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -15,7 +15,7 @@ import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
-import { connectToPage, launchChrome, serveStatic } from "@apnex/test-harness";
+import { connectToPage, launchChrome, serveStatic } from "@apnex/headless-chromium";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 

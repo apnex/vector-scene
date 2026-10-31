@@ -10,7 +10,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { scratchFolder } from "@apnex/test-harness";
+import { scratchFolder } from "@apnex/clean-runner";
 
 import { findClockAndChance } from "../../tools/check-clock-and-chance.mjs";
 import { contractRows, exportMapProblems } from "../../tools/check-export-map.mjs";
@@ -71,7 +71,8 @@ test("every contract row is served by an export or deferred with a ruling", () =
 test("the package declares no dependency, and pins TypeScript", () => {
 	assert.equal(pkg.dependencies, undefined);
 	assert.equal(pkg.devDependencies.typescript, "5.9.3");
-	assert.equal(pkg.devDependencies["@apnex/test-harness"], "https://github.com/apnex/test-harness/releases/download/v0.1.0/apnex-test-harness-0.1.0.tgz");
+	assert.equal(pkg.devDependencies["@apnex/clean-runner"], "https://github.com/apnex/clean-runner/releases/download/v0.2.0/apnex-clean-runner-0.2.0.tgz");
+	assert.equal(pkg.devDependencies["@apnex/headless-chromium"], "https://github.com/apnex/headless-chromium/releases/download/v0.1.0/apnex-headless-chromium-0.1.0.tgz");
 	assert.equal(pkg.type, "module");
 	assert.equal(pkg.engines.node, ">=22");
 	assert.equal(pkg.name, "@apnex/vector-scene");
