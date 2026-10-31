@@ -146,7 +146,8 @@ A call made from inside a platform method while the scene writes -- a fake platf
 
 ## Test
 
-The gate builds, runs every test -- among them two tests in headless Chrome driven over the DevTools protocol with trusted input -- then the vocabulary, source, runtime, clock and chance, and export-map checks, and mission-kit's style checks over the Markdown.
+The gate builds, runs every test -- among them two tests in headless Chrome driven over the DevTools protocol with trusted input -- then the vocabulary, source, runtime, clock and chance, and export-map checks, and mission-kit's style checks over the Markdown.\
+The tests, and the consumer test, run under `test-harness`'s runner, a development dependency pinned to its release file, which fails a run that leaves a file, a folder or a process behind.
 
 Run the gate with a mission-kit checkout beside this repository, or with `MISSION_KIT` naming one, and with `google-chrome` on `PATH` or `CHROME` naming a Chrome:
 ```bash

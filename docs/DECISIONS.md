@@ -163,3 +163,20 @@ Bytes as shipped, comments included, then with comments removed, each also gzipp
 | `reflection.js` | 5,569 | 1,853 | 3,113 | 931 |
 | `argument-reading.js`, `conversion.js`, `declaration-problems.js`, `index.js`, `shape-at-point.js`, `types.js` | 12,473 | 5,105 | 6,524 | 2,478 |
 | every built module | 54,861 | 17,497 | 36,859 | 10,498 |
+
+---
+
+## D4 - The tests run on test-harness
+
+**Ruled by:** the director, 2026-10-31 (draw's `H26-19` as amended: no test run may leave anything behind, and what the repositories' copies share is one component, `test-harness`, taken by each in its tests alone, pinned to its release file).\
+**Affects:** `package.json` and its lockfile, `test/browser/`, `tools/consumer-test.mjs` and the tests that make scratch folders; nothing in `src/`, and nothing the package ships.
+
+**Ruling.**\
+`@apnex/test-harness` `0.1.0` is a development dependency, pinned to its release file by its URL and, in the lockfile, by its hash; `files` is unchanged, so no file of it is packed.\
+`npm test` runs the tests under its runner, `test-harness run`, and `npm run consumer` the consumer test under `test-harness exec`, so each run has a folder of its own and fails on anything left in it or still running after it.\
+I10's and I14's tests launch Chrome with its `launchChrome`, in a folder of its own, drive it through its `connectToPage`, and serve the pages, the built files and `test/support/`, whose generator I10's page imports, with its `serveStatic`; the pages, their exercises and `test/support/` are this repository's own, as before.\
+`test/browser/chrome-driver.js`, `teardown.test.js` and `fake-browser.mjs` are gone (235, 119 and 33 lines): what they held -- Chrome's whole process group stopped, its profile removed, the server's connections ended, and the lock folder Chrome makes in the temporary folder removed by either name -- this repository's copy knew only the dotted name Chrome 136 gives it, so on a later Chrome, as GitHub's runner holds, every run left the undotted one behind -- is `test-harness`'s, held by its own tests, and the four tests of `teardown.test.js` with it, so the run counts 147 to 143 tests.\
+The run again with `--experimental-websocket` is gone: the tests' floor is `test-harness`'s, Node.js 22.4, whose `WebSocket` is global, and on an earlier Node.js `connectToPage` says so.\
+The consumer test serves the page and the installed files with `serveStatic` and loads them in a one-shot Chrome with `dumpDom`, in a folder of its own -- so Chrome's lock folder, crash reporter and keyring use no longer reach the caller's temporary folder or the user's own -- and its scratch folder is a `scratchFolder`, removed however the test ends; its `--keep` is gone, since a folder kept would be one the run fails on.\
+The tests' scratch folders are `scratchFolder`s too.\
+The runner is not given `--test-force-exit`, which `test-harness`'s README recommends: on Node.js 22 it cut the results a test file reports when they are many -- `snap-grid`'s `test/contract/declared-grid.test.js` reported 61 of its 78 tests with it -- and no test here leaves anything running for it to end.
