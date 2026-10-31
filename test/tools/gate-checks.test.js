@@ -5,10 +5,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+
+import { scratchFolder } from "@apnex/test-harness";
 
 import { candidateWords, findVocabulary, readVocabulary, splitWords } from "../../tools/check-vocabulary.mjs";
 import { findClockAndChance } from "../../tools/check-clock-and-chance.mjs";
@@ -18,7 +19,7 @@ import { findConfigProblems, findSourceProblems, sourceProblems } from "../../to
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const run = (tool, ...args) => spawnSync(process.execPath, [path.join(root, "tools", tool), ...args], { encoding: "utf8" });
 const scratch = (files) => {
-	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vector-scene-check-"));
+	const dir = scratchFolder("vector-scene-check-");
 	for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), text);
 	return dir;
 };
@@ -118,7 +119,7 @@ test("I12, VS1, VS12: the document's row holds elementsFromPoint -- a built file
 	const built = fs.readdirSync(path.join(root, "dist")).filter((f) => f.endsWith(".js")).map((f) => fs.readFileSync(path.join(root, "dist", f), "utf8"));
 	assert.ok(built.some((text) => text.includes(".elementsFromPoint")), "a built file names elementsFromPoint as a member");
 	assert.equal(run("check-runtime.mjs").status, 0);
-	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vector-scene-dist-"));
+	const dir = scratchFolder("vector-scene-dist-");
 	try {
 		fs.cpSync(path.join(root, "dist"), dir, { recursive: true });
 		const file = path.join(dir, "shape-at-point.js");
@@ -235,7 +236,7 @@ test("I12: the runtime check allows only the globals the build uses -- exactly t
 
 test("I12, VS1: getAttribute, childNodes and getBoundingClientRect planted in a copy of the built files are each found", () => {
 	for (const [plant, name] of [["export const planted = (el) => el.getAttribute(\"id\");\n", "getAttribute"], ["export const planted = (el) => el.childNodes.length;\n", "childNodes"], ["export const planted = (el) => el.getBoundingClientRect().x;\n", "getBoundingClientRect"]]) {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vector-scene-dist-"));
+		const dir = scratchFolder("vector-scene-dist-");
 		try {
 			fs.cpSync(path.join(root, "dist"), dir, { recursive: true });
 			const file = path.join(dir, "scene-writing.js");
@@ -363,7 +364,7 @@ test("I12: the clock and chance check reads code only, and passes a direct membe
 
 /** A copy of the repository's src/ and tsconfig.json, with `plant` applied, checked by the source check. */
 function sourceCheckOf(plant) {
-	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vector-scene-source-"));
+	const dir = scratchFolder("vector-scene-source-");
 	try {
 		fs.cpSync(path.join(root, "src"), path.join(dir, "src"), { recursive: true });
 		fs.copyFileSync(path.join(root, "tsconfig.json"), path.join(dir, "tsconfig.json"));
