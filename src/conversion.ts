@@ -48,8 +48,8 @@ export function readPoint(fn: string, value: unknown): { readonly x: number; rea
 	return { x, y };
 }
 
-/** VS10 steps 3 to 6: the point converted through the root's screen transform, or its inverse for toDrawing. */
-export function convertPoint(fn: string, platform: PlatformRoot, point: { readonly x: number; readonly y: number }, inverted: boolean): ScenePoint {
+/** VS10 steps 3 to 5: the root's screen transform, or its inverse for toDrawing, its a to f read in order, all before any is judged. */
+export function readTransform(fn: string, platform: PlatformRoot, inverted: boolean): { readonly a: number; readonly b: number; readonly c: number; readonly d: number; readonly e: number; readonly f: number } {
 	let transform: unknown = Reflect.apply(platform.getScreenCTM, platform.root, []);
 	if (!isObject(transform)) throw new Error(`${fn}: the root answers no screen transform`);
 	if (inverted) {
@@ -66,6 +66,12 @@ export function convertPoint(fn: string, platform: PlatformRoot, point: { readon
 	const e = used.e;
 	const f = used.f;
 	if (!isFiniteNumber(a) || !isFiniteNumber(b) || !isFiniteNumber(c) || !isFiniteNumber(d) || !isFiniteNumber(e) || !isFiniteNumber(f)) throw new Error(`${fn}: the screen transform's a to f must be six finite numbers`);
+	return { a, b, c, d, e, f };
+}
+
+/** VS10 steps 3 to 6: the point converted through the root's screen transform, or its inverse for toDrawing. */
+export function convertPoint(fn: string, platform: PlatformRoot, point: { readonly x: number; readonly y: number }, inverted: boolean): ScenePoint {
+	const { a, b, c, d, e, f } = readTransform(fn, platform, inverted);
 	const x = a * point.x + c * point.y + e;
 	const y = b * point.x + d * point.y + f;
 	if (!isFiniteNumber(x) || !isFiniteNumber(y)) throw new Error(`${fn}: the converted point is not finite`);

@@ -3,7 +3,7 @@
 // browser's SVG element is passed as the root, and the elements its document makes are what layerElement
 // answers; an items answer's shapes are passed back to put; plain objects of the slice's shape, and no root,
 // type-check too. Each line marked as an expected error must fail to compile, or the compile fails.
-import { openScene, type DescribedShape, type ElementSlice, type OpenSceneResult, type Scene, type SceneDeclaration, type SceneDocument, type SceneElement, type SceneItem, type SceneLayer, type SceneMatrix, type ScenePoint, type SceneRoot, type Shape, type ShapeAtElement } from "@apnex/vector-scene";
+import { openScene, type DescribedShape, type ElementSlice, type OpenSceneResult, type Scene, type SceneDeclaration, type SceneDocument, type SceneElement, type SceneItem, type SceneLayer, type SceneMatrix, type ScenePoint, type SceneRoot, type SceneView, type SceneVisible, type Shape, type ShapeAtElement } from "@apnex/vector-scene";
 
 declare const svg: SVGSVGElement;
 declare const event: PointerEvent;
@@ -118,6 +118,30 @@ if (mine.ok) {
 	const id: number = mine.scene.layerElement("f").id;
 	void id;
 }
+
+// A viewed scene on a browser's svg element: its view set, read, zoomed about a screen point and told, and what it shows
+// handed on in snap-grid's view form.
+declare function inView(view: { readonly region: { readonly kind: "rect"; readonly x: number; readonly y: number; readonly w: number; readonly h: number }; readonly scale: number }): void;
+const viewedScene = openScene({ root: svg, layers: [{ name: "grid", foreign: true }, { name: "items" }], view: true });
+if (viewedScene.ok) {
+	const scene = viewedScene.scene;
+	const written: SceneView = scene.setView({ x: -480, y: 270, scale: 0.5 });
+	const kept: SceneView = scene.setView(scene.view());
+	const zoomed: SceneView = scene.zoomAbout({ x: event.clientX, y: event.clientY }, 2);
+	const shown: SceneVisible = scene.visible();
+	inView(shown);
+	const stop: () => undefined = scene.onView((visible) => inView(visible));
+	stop();
+	void [written, kept, zoomed];
+	// @ts-expect-error -- a view holds x, y and scale
+	scene.setView({ x: 0, y: 0 });
+	// @ts-expect-error -- a view's scale cannot be written
+	written.scale = 2;
+	// @ts-expect-error -- zoomAbout takes a scale
+	scene.zoomAbout({ x: 0, y: 0 });
+}
+// @ts-expect-error -- view is a boolean
+openScene({ root: svg, layers: [{ name: "a" }], view: 1 });
 
 // A window is no root: it has no ownerDocument.
 // @ts-expect-error -- not a root

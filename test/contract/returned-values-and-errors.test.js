@@ -14,7 +14,7 @@ import { describe, isFrozenToDepth } from "../support/frozen.js";
 import { recorded, revoked, trapping } from "../support/recording-proxy.js";
 
 const LAYERS = [{ name: "items" }, { name: "free", foreign: true }];
-const SCENE_KEYS = ["layers", "put", "remove", "items", "itemOf", "itemAt", "layerElement", "toDrawing", "toScreen", "close"];
+const SCENE_KEYS = ["layers", "put", "remove", "items", "itemOf", "itemAt", "layerElement", "toDrawing", "toScreen", "setView", "view", "visible", "zoomAbout", "onView", "close"];
 const isTypeError = (fn) => (e) => Object.getPrototypeOf(e) === TypeError.prototype && e.message.startsWith(`${fn}: `);
 const isBaseError = (fn) => (e) => Object.getPrototypeOf(e) === Error.prototype && e.message.startsWith(`${fn}: `);
 /** A value every trap of which fails the test: an argument beyond a function's form, which must never be read. */

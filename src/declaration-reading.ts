@@ -3,7 +3,7 @@
  * its pointer, or the root's members and the layers a scene is opened from.
  *
  * The declaration is read breadth first, as input-binding reads one: its prototype, its own keys, the
- * descriptors of root and layers its own keys hold, in that order -- never a getter of it, an inherited
+ * descriptors of root, layers and view its own keys hold, in that order -- never a getter of it, an inherited
  * property absent, a symbol-named property ignored, a key whose descriptor reads undefined absent, and a
  * reflection that throws refusing the whole declaration, nothing further read. Then, when root's
  * descriptor holds an object, its ownerDocument, that document's createElementNS and elementsFromPoint, and
@@ -40,14 +40,18 @@ export interface JudgedLayer {
 	readonly foreign: boolean;
 }
 
-/** A declaration with no problem: what a scene is opened from. */
+/** A declaration with no problem: what a scene is opened from, and whether it asked for a view (VS14). */
 export interface JudgedDeclaration {
 	readonly ok: true;
 	readonly platform: PlatformRoot | null;
 	readonly layers: readonly JudgedLayer[];
+	readonly view: boolean;
 }
 
-const DECLARATION_FORM: readonly string[] = ["root", "layers"];
+const DECLARATION_FORM: readonly string[] = ["root", "layers", "view"];
+
+/** The attribute a viewed scene writes on every layer's element, so no layer of one may declare it (VS3, VS14). */
+const VIEW_ATTRIBUTE = "transform";
 const LAYER_FORM: readonly string[] = ["name", "attrs", "foreign"];
 
 /** An object is a non-null value whose typeof is 'object', so a function never is one. */
@@ -108,6 +112,17 @@ export function judgeDeclaration(declaration: unknown): JudgedDeclaration | { re
 		else platform = read;
 	}
 
+	// step 4a: view, its descriptor read after root's and layers': a data property holding a boolean, false the same as
+	// absent; true with no root is view-without-root, a root present but refused being /root's problem alone
+	let view = false;
+	const viewProperty = top.properties.get("view");
+	if (viewProperty !== undefined) {
+		const value = dataValue(viewProperty);
+		if (!viewProperty.data || typeof value !== "boolean") problems.add("/view", "invalid-value");
+		else if (value && rootProperty === undefined) problems.add("/view", "view-without-root");
+		else view = value;
+	}
+
 	// step 4: the layers, as an array is read, and not empty
 	const layers: JudgedLayer[] = [];
 	const layersProperty = top.properties.get("layers");
@@ -143,8 +158,11 @@ export function judgeDeclaration(declaration: unknown): JudgedDeclaration | { re
 					if (!attrsProperty.data) problems.add(childPointer(pointer, "attrs"), "not-an-object");
 					else {
 						const reading = readAttributeRecord(attrsProperty.value);
-						if (reading.ok) attrs = reading.entries;
-						else problems.add(childPointer(pointer, "attrs"), reading.kind);
+						if (reading.ok) {
+							attrs = reading.entries;
+							// step 7a: a viewed declaration's layer declaring the view's own attribute, reported only while view is true and accepted
+							if (view && attrs.some(([attribute]) => attribute === VIEW_ATTRIBUTE)) problems.add(childPointer(childPointer(pointer, "attrs"), VIEW_ATTRIBUTE), "layer-transform");
+						} else problems.add(childPointer(pointer, "attrs"), reading.kind);
 					}
 				}
 				// step 6: foreign
@@ -167,5 +185,5 @@ export function judgeDeclaration(declaration: unknown): JudgedDeclaration | { re
 	}
 
 	if (problems.size > 0) return { ok: false, refusal: problems.refusal() };
-	return { ok: true, platform, layers };
+	return { ok: true, platform, layers, view };
 }

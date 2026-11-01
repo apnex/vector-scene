@@ -11,9 +11,12 @@ const TRAPS = ["getPrototypeOf", "setPrototypeOf", "isExtensible", "preventExten
  * A recording platform: `ctm` is the screen transform's six numbers. With `hits`, the document holds
  * elementsFromPoint, which logs its call -- naming its receiver, `document` when it is the document -- and
  * answers a recorded array of what `hits(x, y, elements)` answers, `elements` the elements made so far, in
- * the order made; without it, the document holds no such member, as a fake document of 0.1.0's slice.
+ * the order made; without it, the document holds no such member, as a fake document of 0.1.0's slice. With
+ * `size`, an object whose `w` and `h` a test may change, the root holds clientWidth and clientHeight, getters
+ * answering them, as a viewed scene's visible() reads them (VS15); `ctm` is read at each call, so a test may
+ * change it too.
  */
-export function recordingPlatform({ ctm = { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20 }, hits = null } = {}) {
+export function recordingPlatform({ ctm = { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20 }, hits = null, size = null } = {}) {
 	const log = [];
 	const labels = new WeakMap();
 	const nameOf = (value) => (typeof value === "object" && value !== null && labels.has(value) ? labels.get(value) : JSON.stringify(value));
@@ -106,7 +109,7 @@ export function recordingPlatform({ ctm = { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20
 	}
 	const document = recorded(documentTarget, "document");
 
-	const root = recorded({
+	const rootTarget = {
 		ownerDocument: document,
 		appendChild(layer) {
 			call("root", "appendChild", [layer]);
@@ -118,7 +121,12 @@ export function recordingPlatform({ ctm = { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20
 			log.push(`  -> ${nameOf(transform)}`);
 			return transform;
 		},
-	}, "root");
+	};
+	if (size !== null) {
+		Object.defineProperty(rootTarget, "clientWidth", { get: () => size.w, enumerable: true });
+		Object.defineProperty(rootTarget, "clientHeight", { get: () => size.h, enumerable: true });
+	}
+	const root = recorded(rootTarget, "root");
 
 	return { root, document, log, labels };
 }

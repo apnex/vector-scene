@@ -63,11 +63,17 @@ export interface SceneDocument<E extends ElementSlice<E> = SceneElement> {
 	elementsFromPoint?(x: number, y: number): readonly unknown[];
 }
 
-/** The root (VS1): the platform's element the scene draws into, an svg element in a browser. */
+/**
+ * The root (VS1): the platform's element the scene draws into, an svg element in a browser. Its clientWidth and
+ * clientHeight are read by a viewed scene's visible() alone (VS15), so a root of a scene without a view need
+ * hold neither.
+ */
 export interface SceneRoot<E extends ElementSlice<E> = SceneElement> {
 	readonly ownerDocument: SceneDocument<E>;
 	readonly appendChild: (layer: E) => unknown;
 	getScreenCTM(): SceneMatrix | null;
+	readonly clientWidth?: number;
+	readonly clientHeight?: number;
 }
 
 /** An attribute record (VS5): names of a letter or underscore followed by letters, digits, underscores, periods and hyphens, none beginning "on"; values strings or finite numbers. */
@@ -124,10 +130,34 @@ export interface LayerDeclaration {
 	readonly foreign?: boolean;
 }
 
-/** A scene's declaration (VS3): its layers, back to front, and optionally the root it draws into. */
+/** A scene's declaration (VS3): its layers, back to front, optionally the root it draws into, and, beside a root, a view (VS14). */
 export interface SceneDeclaration<E extends ElementSlice<E> = SceneElement> {
 	readonly root?: SceneRoot<E>;
 	readonly layers: readonly LayerDeclaration[];
+	/** A view of the scene, asked beside a root; false the same as absent. */
+	readonly view?: boolean;
+}
+
+/** A view (VS14): the drawing point at the root's top-left corner, and the root's own units per drawing unit. */
+export interface SceneView {
+	readonly x: number;
+	readonly y: number;
+	readonly scale: number;
+}
+
+/** A closed rect in drawing coordinates, in snap-grid's view form (VS15). */
+export interface SceneRegion {
+	readonly kind: "rect";
+	readonly x: number;
+	readonly y: number;
+	readonly w: number;
+	readonly h: number;
+}
+
+/** What a viewed scene shows (VS15): its region in drawing coordinates and the screen pixels per drawing unit, handed to snap-grid's inView unchanged. */
+export interface SceneVisible {
+	readonly region: SceneRegion;
+	readonly scale: number;
 }
 
 /** A layer as the scene answers it: a frozen copy of its declaration. */
@@ -150,7 +180,7 @@ export interface ShapeAtElement {
 	readonly path: readonly number[];
 }
 
-/** An open scene (VS3 to VS10, VS12), E the kind of element its root's document makes. */
+/** An open scene (VS3 to VS10, VS12, VS14 to VS17), E the kind of element its root's document makes. */
 export interface Scene<E extends ElementSlice<E> = SceneElement> {
 	readonly layers: readonly SceneLayer[];
 	/** Makes `shapes` the description of item `key` in `layer`, placing it as `place` says (VS6, VS7). */
@@ -169,12 +199,22 @@ export interface Scene<E extends ElementSlice<E> = SceneElement> {
 	readonly toDrawing: (screen: ScreenOrDrawingPoint) => ScenePoint;
 	/** Where a point in drawing coordinates lies on the screen (VS10). */
 	readonly toScreen: (point: ScreenOrDrawingPoint) => ScenePoint;
+	/** Writes a view on every layer's element and answers it; refused by a scene declared without a view (VS14). */
+	readonly setView: (view: SceneView) => SceneView;
+	/** The view written (VS14). */
+	readonly view: () => SceneView;
+	/** What the root shows, in snap-grid's view form (VS15). */
+	readonly visible: () => SceneVisible;
+	/** The view at a scale that keeps the drawing point under a screen point where it is, setting nothing (VS16). */
+	readonly zoomAbout: (screen: ScreenOrDrawingPoint, scale: number) => SceneView;
+	/** Tells a listener what is visible after each setView; answers a function that removes it (VS17). */
+	readonly onView: (listener: (visible: SceneVisible) => unknown) => () => undefined;
 	/** Closes the scene and removes every layer element it made; later calls do nothing (VS3). */
 	readonly close: () => undefined;
 }
 
 /** The codes a refused declaration's problems carry (VS3). */
-export type DeclarationProblemCode = "not-an-object" | "unknown-property" | "missing-property" | "invalid-value" | "duplicate-name";
+export type DeclarationProblemCode = "not-an-object" | "unknown-property" | "missing-property" | "invalid-value" | "duplicate-name" | "view-without-root" | "layer-transform";
 
 /** One problem of a refused declaration: an RFC 6901 pointer into it, and a code. */
 export interface DeclarationProblem {

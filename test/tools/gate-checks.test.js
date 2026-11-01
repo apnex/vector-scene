@@ -92,12 +92,42 @@ test("I12, VS1: the runtime check's platform members are lib.dom.d.ts's, and VS1
 	}
 	for (const name of Object.values(PLATFORM_SLICE).flat()) assert.ok(members.has(name), `${name}, of the slice, is a platform member the check allows`);
 	assert.deepEqual(PLATFORM_SLICE, {
-		root: ["ownerDocument", "appendChild", "getScreenCTM"],
+		root: ["ownerDocument", "appendChild", "getScreenCTM", "clientWidth", "clientHeight"],
 		document: ["createElementNS", "elementsFromPoint"],
 		element: ["setAttribute", "removeAttribute", "appendChild", "insertBefore", "remove", "textContent"],
 		transform: ["inverse", "a", "b", "c", "d", "e", "f"],
 		point: ["x", "y"],
+		view: ["x", "y", "scale"],
 	});
+});
+
+test("I12, VS1, VS15: the root's row holds clientWidth and clientHeight, and the view's scale is named -- a built file naming them passes, the control; one naming clientLeft, scrollWidth or getBoundingClientRect, their neighbours, fails, the falsifier", () => {
+	const finding = (name) => `names ${name}, a platform member outside VS1's slice`;
+	const control = [
+		"export const a = (root) => [root.clientWidth, root.clientHeight];\n",
+		"export const b = ({ clientWidth, clientHeight }) => clientWidth + clientHeight;\n",
+		"export const c = (view) => view.scale * Reflect.getOwnPropertyDescriptor(view, \"scale\").value;\n",
+	];
+	for (const text of control) assert.deepEqual(findRuntimeUses(text), [], text);
+	for (const name of ["clientLeft", "scrollWidth", "getBoundingClientRect"]) {
+		for (const text of [`export const a = (root) => root.${name};\n`, `export const b = ({ ${name} }) => ${name};\n`]) assert.deepEqual(findRuntimeUses(text).map((f) => f.finding), [finding(name)], text);
+	}
+	// the built files name clientWidth, and pass; scrollWidth planted in a copy of them fails
+	const built = fs.readdirSync(path.join(root, "dist")).filter((f) => f.endsWith(".js")).map((f) => fs.readFileSync(path.join(root, "dist", f), "utf8"));
+	assert.ok(built.some((text) => text.includes(".clientWidth")), "a built file names clientWidth as a member");
+	const dir = scratchFolder("vector-scene-dist-");
+	try {
+		fs.cpSync(path.join(root, "dist"), dir, { recursive: true });
+		const file = path.join(dir, "open-scene.js");
+		const text = fs.readFileSync(file, "utf8");
+		assert.ok(text.includes("root.clientWidth"), "control: the built visible() reads root.clientWidth");
+		fs.writeFileSync(file, text.replace("root.clientWidth", "root.scrollWidth"));
+		const r = run("check-runtime.mjs", dir);
+		assert.equal(r.status, 1);
+		assert.match(r.stdout, /open-scene\.js:\d+  names scrollWidth, a platform member outside VS1's slice/);
+	} finally {
+		fs.rmSync(dir, { recursive: true, force: true });
+	}
 });
 
 test("I12, VS1, VS12: the document's row holds elementsFromPoint -- a built file naming it passes, the control; one naming elementFromPoint, its singular neighbour, fails, the falsifier", () => {

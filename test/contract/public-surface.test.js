@@ -46,13 +46,13 @@ test("VS11: no built file reads a clock or randomness, holds a timer, or reaches
 	for (const file of files) assert.deepEqual(findClockAndChance(fs.readFileSync(path.join(dist, file), "utf8"), file), [], file);
 });
 
-test("the export map: one path, openScene serving all five capabilities, { part: 'vector-scene', serves }, nothing deferred", () => {
+test("the export map: one path, openScene serving all six capabilities, { part: 'vector-scene', serves }, nothing deferred", () => {
 	assert.deepEqual(map, {
 		package: "@apnex/vector-scene",
 		paths: {
 			".": {
 				exports: {
-					openScene: { part: "vector-scene", serves: ["declared-scene", "keyed-shapes", "shape-at-element", "shape-at-point", "screen-conversion"] },
+					openScene: { part: "vector-scene", serves: ["declared-scene", "keyed-shapes", "shape-at-element", "shape-at-point", "screen-conversion", "scene-view"] },
 				},
 			},
 		},
@@ -62,7 +62,7 @@ test("the export map: one path, openScene serving all five capabilities, { part:
 
 test("every contract row is served by an export or deferred with a ruling", () => {
 	const rows = contractRows(fs.readFileSync(path.join(root, "CONTRACT.md"), "utf8"));
-	assert.equal(rows.length, 5);
+	assert.equal(rows.length, 6);
 	const served = new Set(Object.values(map.paths).flatMap((e) => Object.values(e.exports ?? {})).flatMap((x) => x.serves));
 	for (const row of rows) assert.ok(served.has(row) || map.deferred[row], `${row} is neither served nor deferred`);
 	for (const [row, ruling] of Object.entries(map.deferred)) assert.match(ruling, /^D\d+$/, `${row} is deferred without a ruling`);
@@ -76,7 +76,7 @@ test("the package declares no dependency, and pins TypeScript", () => {
 	assert.equal(pkg.type, "module");
 	assert.equal(pkg.engines.node, ">=22");
 	assert.equal(pkg.name, "@apnex/vector-scene");
-	assert.equal(pkg.version, "0.2.0");
+	assert.equal(pkg.version, "0.3.0");
 	assert.equal(pkg.repository.url, "git+https://github.com/apnex/vector-scene.git");
 	assert.deepEqual(pkg.files.sort(), ["CONTRACT.md", "LICENSE", "README.md", "VISION.md", "dist"]);
 });

@@ -11,8 +11,8 @@ import { contractRows } from "../../tools/check-export-map.mjs";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const rows = contractRows(fs.readFileSync(path.join(here, "..", "..", "CONTRACT.md"), "utf8"));
 
-test("CONTRACT.md has its five capabilities", () => {
-	assert.deepEqual(rows, ["declared-scene", "keyed-shapes", "shape-at-element", "shape-at-point", "screen-conversion"]);
+test("CONTRACT.md has its six capabilities", () => {
+	assert.deepEqual(rows, ["declared-scene", "keyed-shapes", "shape-at-element", "shape-at-point", "screen-conversion", "scene-view"]);
 });
 
 for (const row of rows) {
@@ -30,10 +30,10 @@ test("CONTRACT.md carries the six headings of a component entry, in order", () =
 	}
 });
 
-test("CONTRACT.md states every rule, VS1 to VS13, and every invariant, I1 to I15", () => {
+test("CONTRACT.md states every rule, VS1 to VS17, and every invariant, I1 to I20", () => {
 	const text = fs.readFileSync(path.join(here, "..", "..", "CONTRACT.md"), "utf8");
-	for (let n = 1; n <= 13; n++) assert.match(text, new RegExp(`\\*\\*VS${n} -- `), `VS${n}`);
-	for (let n = 1; n <= 15; n++) assert.match(text, new RegExp(`^\\| I${n} \\|`, "m"), `I${n}`);
+	for (let n = 1; n <= 17; n++) assert.match(text, new RegExp(`\\*\\*VS${n} -- `), `VS${n}`);
+	for (let n = 1; n <= 20; n++) assert.match(text, new RegExp(`^\\| I${n} \\|`, "m"), `I${n}`);
 });
 
 test("CONTRACT.md names no file or design of draw's but its one provenance line (GR4)", () => {

@@ -4,7 +4,8 @@
 // against this build, each run over a fresh platform; every answer, every error's constructor and message,
 // every platform call and every read a recording Proxy logs is transcribed, and the two transcripts must be
 // equal once this build's listed changes are taken out, each counted where it is taken:
-// - the scene's keys hold itemAt, after itemOf;
+// - the scene's keys hold itemAt, after itemOf, and 0.3.0's five functions of a view -- setView, view, visible,
+//   zoomAbout and onView, after toScreen -- which a scene declared without a view, as every table here is, refuses;
 // - the root's document's elementsFromPoint is read as the scene opens, after createElementNS -- the read
 //   that refuses a root whose getter throws, which 0.1.0 opened (held on its own below).
 import assert from "node:assert/strict";
@@ -19,6 +20,7 @@ import { recordingPlatform } from "../support/recording-platform.js";
 import { phantom, recorded, revoked, trapping } from "../support/recording-proxy.js";
 
 const SCENE_KEYS_010 = ["layers", "put", "remove", "items", "itemOf", "layerElement", "toDrawing", "toScreen", "close"];
+const VIEW_KEYS = ["setView", "view", "visible", "zoomAbout", "onView"];
 const EXTRA_READ = "document get elementsFromPoint";
 
 /**
@@ -44,9 +46,9 @@ function transcriber(open, release) {
 		seen.add(value);
 		let keys = Reflect.ownKeys(value);
 		if (release === "0.2.0" && keys.includes("itemAt")) {
-			// the listed change: the scene gains itemAt after itemOf, and nothing else
-			assert.deepEqual(keys, [...SCENE_KEYS_010.slice(0, 5), "itemAt", ...SCENE_KEYS_010.slice(5)], "the scene's keys, itemAt after itemOf");
-			keys = keys.filter((key) => key !== "itemAt");
+			// the listed changes: the scene gains itemAt after itemOf, and the view's five functions after toScreen, and nothing else
+			assert.deepEqual(keys, [...SCENE_KEYS_010.slice(0, 5), "itemAt", ...SCENE_KEYS_010.slice(5, 8), ...VIEW_KEYS, "close"], "the scene's keys, itemAt after itemOf and the view's after toScreen");
+			keys = keys.filter((key) => key !== "itemAt" && !VIEW_KEYS.includes(key));
 			counts.sceneKeys++;
 		}
 		const frozen = Object.isFrozen(value) ? "frozen " : "";

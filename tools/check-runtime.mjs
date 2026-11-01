@@ -18,10 +18,11 @@
 // reachable through the slice hold -- every member TypeScript's own lib.dom.d.ts declares on Document,
 // XMLDocument, every SVG element interface, DOMMatrix and DOMMatrixReadOnly, and every interface they extend,
 // Element, Node and EventTarget among them -- are platform members; a built file may read, call, write or
-// destructure only those VS1 names -- the root's ownerDocument, appendChild and getScreenCTM; the
+// destructure only those VS1 names -- the root's ownerDocument, appendChild, getScreenCTM, clientWidth and clientHeight; the
 // document's createElementNS and elementsFromPoint; an element's setAttribute, removeAttribute, appendChild,
 // insertBefore, remove and textContent; a transform's inverse and a to f -- and x and y, which the scene reads of the point an
-// application hands a conversion (VS2 rule 6), names an svg element also holds. A platform member outside
+// application hands a conversion (VS2 rule 6), and scale, which with x and y it reads of the view an application hands
+// setView (VS14), names an svg element also holds. A platform member outside
 // the slice -- getAttribute, childNodes, getBoundingClientRect, parentNode, querySelector, children,
 // innerHTML and the rest -- is a finding wherever it is named as a member: by dot, by brackets with a string
 // literal, in a destructuring pattern, on the left of `in`, as the literal key of a Reflect call or of
@@ -55,13 +56,14 @@ export const RUNTIME_NAMES = ["process", "require", "Buffer", "window", "documen
 /** The globals the build names, every one a JavaScript built-in it needs: the only names a built file may use without declaring them. */
 export const ALLOWED_GLOBALS = Object.freeze(["Array", "Error", "JSON", "Map", "Math", "Number", "Object", "Reflect", "Set", "String", "TypeError", "WeakMap", "undefined"]);
 
-/** VS1's platform slice, and the point's x and y (VS2 rule 6): the only platform members a built file may name. */
+/** VS1's platform slice, the point's x and y (VS2 rule 6), and the view's x, y and scale (VS14): the only platform members a built file may name. */
 export const PLATFORM_SLICE = Object.freeze({
-	root: ["ownerDocument", "appendChild", "getScreenCTM"],
+	root: ["ownerDocument", "appendChild", "getScreenCTM", "clientWidth", "clientHeight"],
 	document: ["createElementNS", "elementsFromPoint"],
 	element: ["setAttribute", "removeAttribute", "appendChild", "insertBefore", "remove", "textContent"],
 	transform: ["inverse", "a", "b", "c", "d", "e", "f"],
 	point: ["x", "y"],
+	view: ["x", "y", "scale"],
 });
 const ALLOWED_MEMBERS = new Set(Object.values(PLATFORM_SLICE).flat());
 const REFLECT_WITH_KEY = new Set(["get", "set", "has", "getOwnPropertyDescriptor", "defineProperty", "deleteProperty"]);
