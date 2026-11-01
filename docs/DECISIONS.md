@@ -191,3 +191,99 @@ The runner is not given `--test-force-exit`, which `test-harness`'s README recom
 **Ruling.**\
 The development dependency `D4` names is replaced by two, each pinned to its release file by its URL and, in the lockfile, by its hash: `@apnex/clean-runner` `0.2.0`, for the runner -- `clean-runner run` and `clean-runner exec`, and `scratchFolder` -- and `@apnex/headless-chromium` `0.1.0`, for `launchChrome`, `connectToPage`, `dumpDom` and `serveStatic`; `files` is unchanged, so neither is packed.\
 The calls are `D4`'s, each now from the component that holds it, and the runner is still given no `--test-force-exit`.
+
+---
+
+## D6 - The contract of record for 0.3.0 is draw's ratified PAN-ZOOM.md, revision 10
+
+**Ruled by:** the director, 2026-11-01 (draw's `H26-23`, the design ratified as it stands, every decision at its recommendation but the director's seven rulings).\
+**Affects:** `CONTRACT.md`, `README.md`, `src/`, `test/`, `tools/check-runtime.mjs`, `export-map.json` and `package.json`.
+
+**Ruling.**\
+The contract of record for `0.3.0` is section 3.2 of draw's `dev/design/components/PAN-ZOOM.md`, revision 10, its `vector-scene` paragraph, with PZ22 and appendix A's five rows for its move 1: a view of the scene, asked beside a root.\
+`CONTRACT.md` carries VS14 (the view, its transform, `setView`, `view` and the range the scene supports), VS15 (`visible`), VS16 (`zoomAbout`) and VS17 (`onView`); VS1 widened by the root's `clientWidth` and `clientHeight` and the layers' `transform`, VS2 by `view`'s descriptor and the new functions' arguments, VS3 by `view` and its refusals `view-without-root` and `layer-transform`, VS10 by the view composed, VS13 by the view written on the layers and never on the root; the scene's fifteen keys, the capability row `scene-view`, its fit criterion, and I16 to I20; each rule stated on its own terms, with one provenance line under Reference.\
+This move builds the contract and its Node tests on a recording root; the browser invariants in Chrome and the release by this repository's CI are the next move's, so `0.3.0` is the version of the package and the contract, untagged here.\
+D2 and D3 stand for everything `0.3.0` leaves unchanged: every rule of `0.2.0` reads unchanged for a scene declared without a view.
+
+**Choices made at build.**\
+Where section 3.2 was silent or left a choice open, the build made these; each a test can hold is held by one:
+- The view is its own module, `src/scene-view.ts`: reading a view, its transform's members and their range, the transform's text, and what `visible()` answers judged apart from how it is read, so the far-edge check is tested directly on synthetic rectangles through `dist/scene-view.js`, which the package does not export.
+- VS3's two new rows are steps `4a` and `7a`, so every step of `0.2.0` keeps its number; `view` is judged from its descriptor before the layers are read, which reads nothing more, so `layer-transform` knows whether `view` is accepted.
+- The scene's five new functions follow `toScreen`, before `close`, on every scene: a scene declared without a view refuses each with an `Error` once its arguments are read, as the design asks of `setView` and `visible`.
+- `setView` reads `x`, `y` and `scale` in turn, each descriptor judged as read, a missing one refused in its turn; a symbol-named key is ignored and a prototype of `null` accepted, as VS2 rule 1 reads every record. It answers a frozen view of the numbers it read, the record `view()` answers until the next.
+- The opening transform is written after a layer's declared attributes and before it is appended, `matrix(1, 0, 0, 1, 0, 0)`, `-1 * 0` being `-0`, which `String` writes `0`.
+- `visible()` reads `clientWidth` and judges it, then `clientHeight`, then the screen transform as VS10 reads one for `toScreen`, all six members, with no `inverse`; its scale is `s * Math.hypot(a, b)`.
+- A composed `toDrawing` is refused with VS10's `Error` unless both members are finite, as VS10 step 6 refuses its own answer.
+- The runtime check's root row gains `clientWidth` and `clientHeight`, and a `view` row names `x`, `y` and `scale`, `scale` being a platform member's name as `x` and `y` are; `test/tools/gate-checks.test.js` holds the control -- a built file naming them passes -- and the falsifier -- `clientLeft`, `scrollWidth` and `getBoundingClientRect` named, and `scrollWidth` planted in a copy of the built `open-scene.js`, each fail.
+- The types: `SceneRoot` gains `clientWidth` and `clientHeight`, optional, since a scene without a view reads neither, so every root of `0.2.0` stays assignable; `SceneDeclaration` gains `view?: boolean`; `SceneView`, `SceneVisible` and `SceneRegion` are exported; I11's consumer opens a viewed scene on an `SVGSVGElement` and hands `visible()` to a function typed as `snap-grid`'s view form, with four more expected errors.
+- The recording platform takes a `size` whose `w` and `h` its root's `clientWidth` and `clientHeight` getters answer, and reads its transform's numbers at each call, so a test resizes the root between two calls.
+- I15's listed changes gain the five keys; the `0.1.0` tables, every one declared without a view, otherwise run unchanged against this build, and every other test of `0.2.0` runs unchanged but the two lists of the scene's keys.
+- The vocabulary gains "view", "region" and "listener", the words VS14 to VS17's source uses.
+- The README's consumer reference gains the view's section, with its traps.
+
+**Errata against draw's design** (`PAN-ZOOM.md` revision 10, section 3.2), each a behaviour the design does not name, built at its nearest faithful reading and reported:
+1. "The listeners registered then are called": read as the listeners registered once `setView` has written, so a listener registered or removed while they are told takes effect from the next `setView` -- one removed meanwhile is still told, one added is not (I19, mutant M41).
+2. While listeners are told, the design names `setView`, `put`, `remove` and `close` as refused and every reading function as answering, and names neither `onView` nor the function it answers: both answer, as neither is among the four.
+3. `zoomAbout` "judges the state as `setView` does", yet it sets nothing and every reading function answers while listeners are told: it is read as a reading function, refused when closed, failed, writing or declared without a view, and answering while listeners are told.
+4. "Each with one `visible()` read after the write": read as one answer, read once after the write and handed to each listener; it is read only when a listener is registered, so a `setView` with none reads nothing of the platform, as appendix A's recording row asks.
+5. A `visible()` that fails within `setView` -- the root's width `NaN`, say -- is not named: as a listener's throw is, its `Error`, beginning `setView`, propagates with the view written and the scene open, before any listener is told.
+6. The function `onView` answers is never refused, even once the scene is closed: removing a listener changes nothing the scene shows.
+
+**Mutants planted.**\
+Each mutant was planted in a copy of this repository by an exact replacement of one span of source, built, and run against the tests of the rule it breaks; each failed them, so each new rule's tests can fail.\
+The first run's two survivors each named a test too weak, which was strengthened and the mutant run again: M22, whose test met an inverse underflowed to infinity before the composed check, and M41, whose test removed a listener that had already been told; and its M4 did not compile, so it was planted again as one that does.\
+Every count below is from the final run, every mutant against the final tests.
+- M1, VS2 rule 2 -- `view`'s descriptor read before `layers'`: 1 failed, I16's order.
+- M2, VS3 4a -- `view-without-root` for a root refused, not only absent: 1 failed, I16's table.
+- M3, VS3 7a -- `layer-transform` reported while `view` is refused: 1 failed, I16's table.
+- M4, VS3 4a -- any truthy `view` accepted: 1 failed, I16's table.
+- M5, VS14 rule 1 -- the opening transform not written: 2 failed, I17's opening and I20's recording.
+- M6, VS14 rule 1 -- the opening transform written after the layer is appended: 2 failed, the same.
+- M7, VS14 rule 2 -- the translation's members swapped: 4 failed, I17's strings, I20 and I19.
+- M8, VS14 rule 2 -- the transform written on scene layers alone: 7 failed.
+- M9, VS14 rule 3 -- `y` read before `x`: 1 failed, I17's reading order.
+- M10, VS14 rule 3 -- a scale at or below 0 left to the range: 1 failed, I17's closed scene meeting the `TypeError`.
+- M11, VS14 rule 3 -- the members judged after the write: 1 failed, I17's range, something written.
+- M12, VS14 rule 4 -- the members not judged: 2 failed, I17's range and I18's `zoomAbout` refusals.
+- M13, VS14 rule 4 -- a member of 2^24 refused: 3 failed, I17's strings and range and I18's `zoomAbout` at the edge.
+- M14, VS14 rule 4 -- the vertical member not judged: 1 failed.
+- M15, VS14 rule 4 -- no upper bound on the scale: 1 failed.
+- M16, VS14 rule 4 -- no lower bound on the scale: 1 failed.
+- M17, VS14 -- a view written by a scene declared without one: 1 failed, I20.
+- M18, VS3 lifecycle rule 4 -- `setView` not refused while the scene writes: 2 failed, I17's re-entry and its closed scene.
+- M19, VS14 rule 6 -- `view()` answering a copy, not the record written: 4 failed.
+- M20, VS10 -- `toScreen` not composing the view: 1 failed, I18's arithmetic.
+- M21, VS10 -- `toDrawing` composed in another order: 1 failed.
+- M22, VS10 -- a composed `toDrawing` not judged finite: 1 failed, I18's composed answer, once strengthened.
+- M23, VS15 -- the region's width `W * s`: 2 failed, I18's `visible()` and I19's answer told.
+- M24, VS15 -- the scale from `hypot(a, c)`: 1 failed, I18's skewed transform.
+- M25, VS15 -- the root's screen scale left out: 4 failed, two of I18 and two of I19.
+- M26, VS15 rule 2 -- `clientHeight` read before `clientWidth`: 1 failed, I20's recording.
+- M27, VS15 rule 2 -- a width below 0 accepted: 1 failed.
+- M28, VS15 rule 5 -- the far edges not judged: 1 failed, the synthetic rectangles.
+- M29, VS15 rule 5 -- a scale of 0 accepted: 2 failed, the singular transform and the synthetic rectangles.
+- M30, VS16 -- `x'` from the current scale: 1 failed, I18's `zoomAbout`.
+- M31, VS16 -- the answer not judged: 1 failed, `Number.MIN_VALUE` and the range.
+- M32, VS16 -- the state judged before the arguments: 2 failed, a malformed scale to a closed scene and to a scene without a view.
+- M33, VS17 rule 2 -- the listeners told before the write: 3 failed.
+- M34, VS17 rule 2 -- `visible()` read with no listener registered: 3 failed, I20's recording and two of I17 whose writes it logs.
+- M35, VS17 rule 4 -- a throwing listener not stopping the rest: 1 failed.
+- M36, VS17 rule 3 -- `setView` not refused while listeners are told: 1 failed.
+- M37, VS17 rule 3 -- `put` not refused while listeners are told: 1 failed.
+- M38, VS17 rule 3 -- `close` not refused while listeners are told: 1 failed.
+- M39, VS17 rule 3 -- `view()` refused while listeners are told: 2 failed.
+- M40, VS17 rule 5 -- the removal removing nothing: 1 failed.
+- M41, VS17 rule 2 -- the listeners of the moment each is called told, not those of the write: 1 failed, once strengthened.
+- M42, VS17 rule 2 -- each listener handed a `visible()` of its own: 1 failed.
+- M43, VS1 -- `clientWidth` taken out of the runtime check's root row: 4 failed, the slice, the control, the check over the build and `elementsFromPoint`'s row test, which runs the check over the build.
+- M44, the scene's form -- the view's functions after `close`: 3 failed, the record keys and two of I15.
+
+**Built size.**\
+Measured by `tools/measure-size.mjs` over `dist/` as built for `0.3.0`, as D3 measured `0.2.0`: every built module is loaded wherever `openScene` is imported, `scene-view.js` the new one.\
+Bytes as shipped, comments included, then with comments removed, each also gzipped at level 9:
+
+| Files | Bytes | Gzip | No comments | Gzip |
+|---|---|---|---|---|
+| `open-scene.js` | 22,449 | 5,848 | 16,018 | 3,690 |
+| `scene-view.js` | 6,235 | 2,135 | 3,994 | 1,291 |
+| every built module | 69,928 | 21,825 | 46,346 | 12,929 |

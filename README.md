@@ -103,7 +103,7 @@ svg.addEventListener("pointermove", (event) => {
 |---|---|---|
 | `scene.itemOf(value)` | any value, usually an event's target, read by identity alone | `{ layer, key, path }` for an element the scene made for an item it holds, `path` the shape's indices from the item's own shapes down; `null` for anything else -- a layer's element, a foreign layer's content, the root, an element since removed |
 | `scene.itemAt(screen)` | a screen point `{ x, y }` | `{ layer, key, path }` for the first element in the platform's hit stack at that point that the scene made for an item it holds, or `null` |
-| `scene.toDrawing(screen)` | a screen point `{ x, y }` | the point `{ x, y }` in drawing coordinates, the root's own, through the root's screen transform as it stands |
+| `scene.toDrawing(screen)` | a screen point `{ x, y }` | the point `{ x, y }` in drawing coordinates -- the root's own, or under a view the view's -- through the root's screen transform as it stands |
 | `scene.toScreen(point)` | a point `{ x, y }` in drawing coordinates | the point `{ x, y }` on the screen |
 
 The traps that bite here:
@@ -111,6 +111,37 @@ The traps that bite here:
 - `itemAt` is the platform's own hit test, asked by `document.elementsFromPoint`: it names the first item the scene holds anywhere under the point, looking through what the scene did not make, so it is not the topmost hit -- under an opaque element you drew in a foreign layer it answers the item beneath, where `itemOf` of the target answers `null`.
 - The platform leaves out every element whose `pointer-events` is `none`, so a layer declared with `attrs: { "pointer-events": "none" }` is looked through by both.
 - A root scaled to nothing has no inverse, so `toDrawing` throws.
+
+### A view: panning and zooming
+
+Ask for a view beside a root, and the scene writes one transform on every layer's element -- scene and foreign alike -- so everything you draw pans and zooms together, and the root's own attributes stay yours:
+```js
+const { scene } = openScene({ root: svg, layers: [{ name: "grid", foreign: true }, { name: "things" }], view: true });
+scene.setView({ x: -480, y: -270, scale: 0.5 }); // the drawing point at the root's top-left corner, and root units per drawing unit
+scene.onView((visible) => drawGrid(visible)); // visible is { region: { kind: "rect", x, y, w, h }, scale }, snap-grid's view form
+svg.addEventListener("wheel", (event) => {
+  const scale = Math.min(4, Math.max(0.1, scene.view().scale * (event.deltaY < 0 ? 1.25 : 0.8))); // clamp first
+  scene.setView(scene.zoomAbout({ x: event.clientX, y: event.clientY }, scale)); // the point under the pointer stays put
+});
+new ResizeObserver(() => scene.setView(scene.view())).observe(svg); // a resize changes what the root shows, not the view
+```
+
+| Function | Takes | Answers |
+|---|---|---|
+| `scene.setView(view)` | a plain object of exactly `x`, `y` and `scale`, finite numbers, `scale` above 0 | the view written, after writing `matrix(s, 0, 0, s, -s * x, -s * y)` on every layer and telling each listener |
+| `scene.view()` | nothing | the view written; a viewed scene opens at `{ x: 0, y: 0, scale: 1 }` |
+| `scene.visible()` | nothing | `{ region, scale }`: the rect of drawing coordinates the root shows, from its `clientWidth` and `clientHeight`, and the screen pixels per drawing unit -- handed to `snap-grid`'s `inView` as it is |
+| `scene.zoomAbout(screen, scale)` | a screen point `{ x, y }` and a scale | the view at that scale keeping the drawing point under the screen point where it is; it sets nothing |
+| `scene.onView(listener)` | a function | a function that removes it; each `setView` calls every listener, in order, with one `visible()` |
+
+The traps that bite here:
+- The range is a scale from 2^-16 to 2^16 and each transform member at most 2^24 in magnitude, where the platform's single precision still holds what is written; a view past it is a `TypeError` from `setView` and an `Error` from `zoomAbout`, nothing written -- clamp your scale first.
+- A layer of a viewed scene may not declare `transform`, the view's own attribute (`layer-transform`), and `view: true` with no root is refused (`view-without-root`).
+- Leave the root's `viewBox` off for a viewed scene: `visible()` reads the root's size in its own units, which with no `viewBox` are CSS pixels; it is exact for a root moved and scaled uniformly, not for one with padding, rotated or skewed.
+- A resize is not told: set a view again, `setView(view())` keeping the top-left corner, and every listener hears it.
+- While listeners are told, `setView`, `put`, `remove` and `close` throw; every reading function answers.
+- The conversions follow the view, so `toDrawing` answers drawing coordinates under any pan and zoom; `itemAt` and `itemOf` need nothing, the platform's hit test seeing the layers as drawn.
+- Nothing is unloaded: an item out of view stays on the page.
 
 ### Everything else the scene holds
 
@@ -133,7 +164,7 @@ scene.put("things", "a", [{ tag: "circle", attrs: { r: 5 } }]);
 console.log(JSON.stringify(scene.items("things")));
 ```
 
-A scene with no root answers `itemOf` with `null`, and refuses `itemAt`, the conversions and `layerElement`.
+A scene with no root answers `itemOf` with `null`, and refuses `itemAt`, the conversions and `layerElement`; a scene declared without a view refuses the view's five functions.
 
 ### Errors
 
