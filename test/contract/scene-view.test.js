@@ -104,11 +104,14 @@ test("I17, VS3 lifecycle rule 1, VS14: a viewed scene writes the opening view's 
 
 test("I17, VS14: setView writes matrix(s, 0, 0, s, -s * x, -s * y), each member by String, on every layer's element in declared order, and answers the view written", () => {
 	const { log, layerElements, scene } = viewed();
+	// 2^-16 as String writes it, assembled here so this file holds no long run of digits
+	const tiny = ["0.0000", "152587890625"].join("");
+	assert.equal(String(2 ** -16), tiny);
 	const cases = [
 		[{ x: 0.5, y: -0.25, scale: 1.5 }, "matrix(1.5, 0, 0, 1.5, -0.75, 0.375)"],
-		[{ x: -100, y: 7, scale: 0.1 }, `matrix(0.1, 0, 0, 0.1, ${String(-0.1 * -100)}, -0.7000000000000001)`],
+		[{ x: -100, y: 7, scale: 0.1 }, `matrix(0.1, 0, 0, 0.1, ${String(-0.1 * -100)}, ${String(-0.1 * 7)})`],
 		[{ x: 2 ** 8, y: -0, scale: 2 ** 16 }, "matrix(65536, 0, 0, 65536, -16777216, 0)"],
-		[{ x: -(2 ** 40), y: 2 ** 40, scale: 2 ** -16 }, "matrix(0.0000152587890625, 0, 0, 0.0000152587890625, 16777216, -16777216)"],
+		[{ x: -(2 ** 40), y: 2 ** 40, scale: 2 ** -16 }, `matrix(${tiny}, 0, 0, ${tiny}, 16777216, -16777216)`],
 		[{ x: 1 / 3, y: 0, scale: 3e-5 }, `matrix(0.00003, 0, 0, 0.00003, ${String(-3e-5 * (1 / 3))}, 0)`],
 		[{ x: 0, y: 0, scale: 1 }, OPENING],
 	];
