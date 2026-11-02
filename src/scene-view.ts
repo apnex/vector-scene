@@ -20,8 +20,10 @@ export const SCALE_GREATEST = 2 ** 16;
 /** The greatest magnitude of a transform member the scene writes (VS14). */
 export const MEMBER_GREATEST = 2 ** 24;
 
-/** The view a viewed scene opens at (VS14). */
-export const OPENING_VIEW: SceneView = Object.freeze({ x: 0, y: 0, scale: 1 });
+/** The view a viewed scene opens at (VS14): a fresh frozen record each call, so each scene's opening view is its own. */
+export function openingView(): SceneView {
+	return Object.freeze({ x: 0, y: 0, scale: 1 });
+}
 
 const VIEW_FORM: readonly string[] = ["x", "y", "scale"];
 

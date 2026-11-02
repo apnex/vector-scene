@@ -25,7 +25,7 @@ import { isObject, malformed, readRecordArgument } from "./argument-reading.js";
 import { convertPoint, readPoint, readTransform } from "./conversion.js";
 import { judgeDeclaration } from "./declaration-reading.js";
 import { elementCalls, elementWriter, SVG_NAMESPACE, type ElementRecord, type ElementWriter, type ItemRecord } from "./scene-writing.js";
-import { OPENING_VIEW, readView, transformText, unwritable, visibleAnswer } from "./scene-view.js";
+import { openingView, readView, transformText, unwritable, visibleAnswer } from "./scene-view.js";
 import { firstHeldAtPoint } from "./shape-at-point.js";
 import { frozenAttributes, readShapes } from "./shape-reading.js";
 import type { ElementSlice, OpenSceneResult, Scene, SceneDeclaration, SceneElement, SceneItem, SceneLayer, ScenePoint, SceneView, SceneVisible, ShapeAtElement } from "./types.js";
@@ -50,6 +50,8 @@ function openSceneOver(declaration: unknown): OpenSceneResult {
 	const { platform } = judged;
 	// VS14: a view, asked beside a root -- which judging the declaration ensures -- so a viewed scene always has a platform
 	const viewed = judged.view && platform !== null;
+	// VS14: the view written -- the scene's own opening view until the first setView, made as the scene opens
+	let current: SceneView = openingView();
 
 	const layers: readonly SceneLayer[] = Object.freeze(judged.layers.map((layer) => Object.freeze({ name: layer.name, attrs: frozenAttributes(layer.attrs), foreign: layer.foreign })));
 	const sceneLayers = new Map<string, ItemRecord[]>();
@@ -72,7 +74,7 @@ function openSceneOver(declaration: unknown): OpenSceneResult {
 				inProgress = element as SceneElement;
 				for (const [name, written] of layer.attrs) opening.setAttribute(inProgress, name, written);
 				// VS14: the opening view written as the layer is made, so no frame shows a layer unviewed
-				if (viewed) opening.setAttribute(inProgress, "transform", transformText(OPENING_VIEW));
+				if (viewed) opening.setAttribute(inProgress, "transform", transformText(current));
 				Reflect.apply(platform.appendChild, platform.root, [inProgress]);
 			} catch (error) {
 				const takeBack = inProgress === null ? [...made].reverse() : [inProgress, ...[...made].reverse()];
@@ -95,8 +97,7 @@ function openSceneOver(declaration: unknown): OpenSceneResult {
 	let writingFor = "";
 	// VS17: true while setView tells its listeners, when setView, put, remove and close throw
 	let telling = false;
-	// VS14: the view written, and VS17: the listeners, each its own entry, so one function registered twice is two
-	let current: SceneView = OPENING_VIEW;
+	// VS17: the listeners, each its own entry, so one function registered twice is two
 	const listeners: { readonly listener: (visible: SceneVisible) => unknown }[] = [];
 	const writer: ElementWriter | null = platform === null ? null : elementWriter(platform.rootDocument, platform.createElementNS, () => writingFor);
 	const placing = elementCalls(() => writingFor);

@@ -102,6 +102,20 @@ test("I17, VS3 lifecycle rule 1, VS14: a viewed scene writes the opening view's 
 	}
 });
 
+test("I17, What is returned, VS14 rule 1: each viewed scene's opening view is its own record, made as it opens -- two scenes' views are not one object -- and view() answers it by reference until a setView", () => {
+	const first = viewed().scene;
+	const second = viewed().scene;
+	const a = first.view();
+	const b = second.view();
+	assert.deepEqual(a, { x: 0, y: 0, scale: 1 });
+	assert.deepEqual(b, { x: 0, y: 0, scale: 1 });
+	assert.notEqual(a, b, "two scenes' opening views are not the same object");
+	assert.ok(Object.isFrozen(a) && Object.isFrozen(b));
+	assert.equal(first.view(), a, "the scene's own record, answered again by reference");
+	first.setView({ x: 1, y: 2, scale: 3 });
+	assert.equal(second.view(), b, "a setView of one scene leaves the other's record as it was");
+});
+
 test("I17, VS14: setView writes matrix(s, 0, 0, s, -s * x, -s * y), each member by String, on every layer's element in declared order, and answers the view written", () => {
 	const { log, layerElements, scene } = viewed();
 	// 2^-16 as String writes it, assembled here so this file holds no long run of digits
