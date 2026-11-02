@@ -217,7 +217,7 @@ Where section 3.2 was silent or left a choice open, the build made these; each a
 - The runtime check's root row gains `clientWidth` and `clientHeight`, and a `view` row names `x`, `y` and `scale`, `scale` being a platform member's name as `x` and `y` are; `test/tools/gate-checks.test.js` holds the control -- a built file naming them passes -- and the falsifier -- `clientLeft`, `scrollWidth` and `getBoundingClientRect` named, and `scrollWidth` planted in a copy of the built `open-scene.js`, each fail.
 - The types: `SceneRoot` gains `clientWidth` and `clientHeight`, optional, since a scene without a view reads neither, so every root of `0.2.0` stays assignable; `SceneDeclaration` gains `view?: boolean`; `SceneView`, `SceneVisible` and `SceneRegion` are exported; I11's consumer opens a viewed scene on an `SVGSVGElement` and hands `visible()` to a function typed as `snap-grid`'s view form, with four more expected errors.
 - The recording platform takes a `size` whose `w` and `h` its root's `clientWidth` and `clientHeight` getters answer, and reads its transform's numbers at each call, so a test resizes the root between two calls.
-- I15's listed changes gain the five keys; the `0.1.0` tables, every one declared without a view, otherwise run unchanged against this build, and every other test of `0.2.0` runs unchanged but the two lists of the scene's keys.
+- I15's listed changes gain the five keys; the `0.1.0` tables, every one declared without a view, otherwise run unchanged against this build. Every other test of `0.2.0` runs unchanged but for its pins of what the contract states, each grown with it: the two lists of the scene's keys (`returned-values-and-errors.test.js`, `beside-0.1.0.test.js`), the capability list and the rule and invariant counts (`contract-coverage.test.js`), the export map's `serves`, the count of rows and the version (`public-surface.test.js`), and the runtime check's allowed-members table (`gate-checks.test.js`); the recording platform and I11's consumer gain additions alone.
 - The vocabulary gains "view", "region" and "listener", the words VS14 to VS17's source uses.
 - The README's consumer reference gains the view's section, with its traps.
 
@@ -227,7 +227,7 @@ Where section 3.2 was silent or left a choice open, the build made these; each a
 3. `zoomAbout` "judges the state as `setView` does", yet it sets nothing and every reading function answers while listeners are told: it is read as a reading function, refused when closed, failed, writing or declared without a view, and answering while listeners are told.
 4. "Each with one `visible()` read after the write": read as one answer, read once after the write and handed to each listener; it is read only when a listener is registered, so a `setView` with none reads nothing of the platform, as appendix A's recording row asks.
 5. A `visible()` that fails within `setView` -- the root's width `NaN`, say -- is not named: as a listener's throw is, its `Error`, beginning `setView`, propagates with the view written and the scene open, before any listener is told.
-6. The function `onView` answers is never refused, even once the scene is closed: removing a listener changes nothing the scene shows.
+6. The function `onView` answers is never refused, even once the scene is closed: removing a listener changes nothing the scene shows; after the verifier's reading this is stated in VS17 rule 5 and tested.
 
 **Mutants planted.**\
 Each mutant was planted in a copy of this repository by an exact replacement of one span of source, built, and run against the tests of the rule it breaks; each failed them, so each new rule's tests can fail.\
@@ -287,3 +287,12 @@ Bytes as shipped, comments included, then with comments removed, each also gzipp
 | `open-scene.js` | 22,449 | 5,848 | 16,018 | 3,690 |
 | `scene-view.js` | 6,235 | 2,135 | 3,994 | 1,291 |
 | every built module | 69,928 | 21,825 | 46,346 | 12,929 |
+
+**After the independent verifier's reading.**\
+The verifier failed move 1 on one blocking finding and four test gaps, the gate, the guard and the six errata judged sound; each was reproduced by a test failing or a mutant surviving before the change, and each mutant was planted in a copy, built and run against the tests before and after:
+- B1 -- the opening view was one frozen module-level record, so two scenes' `view()` answered the same object before their first `setView`, against "What is returned": each scene now makes its own as it opens (`openingView` in `src/scene-view.ts`), VS14 rules 1 and 6 say so, and I17's new test, "each viewed scene's opening view is its own record", failed on the old code; the shared record planted again survives the old tests and fails that test.
+- S1 -- `setView`'s plain-object check was untested, a mutant removing it surviving: the malformed list gains a class's instance and another realm's object, each holding own `x`, `y` and `scale`; the mutant now fails I17's reading test.
+- S2 -- a removal of one of two registrations of one function was untested, a mutant removing the function's first registration surviving: f, g, f registered, the second f removed, a `setView` tells f then g; the mutant fails that test.
+- S3 -- erratum 1 was untested at the write, a mutant taking the listeners before the write surviving: a platform method removing a listener during the write, that listener is not told; the mutant fails that test.
+- S4 -- erratum 6 was in this record alone: VS17 rule 5 now states that the remover answers in every state, and a test removes listeners after `close` and after a failed write, and during a write; a mutant making the remover throw once closed fails it.
+- This entry's sentence on which tests of `0.2.0` changed named the lists of the scene's keys alone; it now names every pin that grew with the contract.
