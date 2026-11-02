@@ -11,7 +11,9 @@
 // the scene holding data alone; and in the page on an <svg> element, where it also finds the element the
 // scene made for a shape by itemOf, and again by itemAt at its centre on the screen, converts a point --
 // held to DOMPoint's matrixTransform over the element's own screen transform -- and closes, the root left
-// as it found it.
+// as it found it; and opens a viewed scene on a second <svg>, its layers carrying the view's transform, its
+// conversions composing the view as DOMPoint computes them, visible() the root's size over the view's scale,
+// itemAt answering through the view and zoomAbout keeping a point.
 //
 // The server and the one-shot Chrome are headless-chromium's, the scratch folder clean-runner's (development
 // dependencies, pinned to their release files, which nothing the package ships holds): serveStatic, dumpDom -- $CHROME, or
@@ -76,6 +78,34 @@ function exercise(openScene, platform) {
 		if (scene.itemAt({ x: 1, y: 1 }) !== null) wrong.push("itemAt answered beyond the root");
 		if (scene.close() !== undefined || platform.root.innerHTML !== platform.found) wrong.push("close left " + platform.root.innerHTML);
 		done.push("found its element at " + JSON.stringify(at && at.path), "found it at its point too", "converted (50,30) to (" + point.x + "," + point.y + ")", "closed");
+		// a viewed scene, on a root with no viewBox: its layers carry the view's transform, its conversions compose the
+		// view with the root's screen transform, as DOMPoint computes them, visible() is the root's size over the view's
+		// scale, and itemAt answers through the view
+		const viewedOpen = openScene({ root: platform.viewed, layers: [{ name: "under", foreign: true }, { name: "items" }], view: true });
+		if (!viewedOpen.ok) throw new Error("openScene refused a view: " + JSON.stringify(viewedOpen.problems));
+		const viewed = viewedOpen.scene;
+		viewed.put("items", "box", [{ tag: "rect", attrs: { x: 10, y: 20, width: 30, height: 15, fill: "#c33" } }]);
+		const view = viewed.setView({ x: -20, y: 10, scale: 2 });
+		const layerElements = [...platform.viewed.children].filter((e) => e.localName === "g");
+		if (JSON.stringify(view) !== JSON.stringify({ x: -20, y: 10, scale: 2 }) || layerElements.length !== 2 || layerElements.some((g) => g.getAttribute("transform") !== "matrix(2, 0, 0, 2, 40, -20)")) wrong.push("the view written: " + layerElements.map((g) => g.getAttribute("transform")).join(" "));
+		const ctm = platform.viewed.getScreenCTM();
+		const screen = viewed.toScreen({ x: 25, y: 27.5 });
+		const expectedScreen = new DOMPoint(2 * (25 + 20), 2 * (27.5 - 10)).matrixTransform(ctm);
+		if (!Object.is(screen.x, expectedScreen.x) || !Object.is(screen.y, expectedScreen.y)) wrong.push("a viewed toScreen answered " + JSON.stringify(screen));
+		const r = new DOMPoint(screen.x, screen.y).matrixTransform(ctm.inverse());
+		const drawing = viewed.toDrawing(screen);
+		if (!Object.is(drawing.x, r.x / 2 - 20) || !Object.is(drawing.y, r.y / 2 + 10)) wrong.push("a viewed toDrawing answered " + JSON.stringify(drawing));
+		const visible = viewed.visible();
+		if (JSON.stringify(visible) !== JSON.stringify({ region: { kind: "rect", x: -20, y: 10, w: platform.viewed.clientWidth / 2, h: platform.viewed.clientHeight / 2 }, scale: 2 * Math.hypot(ctm.a, ctm.b) })) wrong.push("visible() answered " + JSON.stringify(visible));
+		const written = layerElements[0].getAttribute("transform");
+		const boxAt = viewed.itemAt(screen);
+		if (!boxAt || boxAt.key !== "box") wrong.push("itemAt through the view answered " + JSON.stringify(boxAt));
+		const zoomed = viewed.zoomAbout(screen, 4);
+		viewed.setView(zoomed);
+		const kept = viewed.toDrawing(screen);
+		if (Math.abs(kept.x - 25) > 1e-9 || Math.abs(kept.y - 27.5) > 1e-9) wrong.push("zoomAbout kept " + JSON.stringify(kept));
+		viewed.close();
+		done.push("viewed:" + written.replace(/ /g, ""), "visible " + visible.region.w + "x" + visible.region.h, "zoomed about a point");
 	} else {
 		if (scene.itemOf({}) !== null) wrong.push("itemOf answered for an object the scene did not make");
 		let refused = "";
@@ -97,7 +127,7 @@ const NODE_PLATFORM = "const platform = { root: null };";
 
 /** The page's platform: an svg element, scaled by its viewBox and offset in the page, and what it held before the scene opened. */
 const PAGE_PLATFORM = `const root = document.getElementById("root");
-const platform = { root, found: root.innerHTML };`;
+const platform = { root, found: root.innerHTML, viewed: document.getElementById("viewed") };`;
 
 async function main() {
 	// 1. the tarball given, or build and pack one, as a release does
@@ -177,7 +207,7 @@ try {
 	out.textContent = "vector-scene-error " + e.message;
 }
 ${exercise.toString()}
-</script></head><body style="margin:0"><svg id="root" width="400" height="200" viewBox="-10 -5 100 50" style="position:absolute;left:30px;top:15px"><rect id="ground" width="100" height="50" fill="#eee"/></svg><pre id="result">vector-scene-pending</pre></body></html>
+</script></head><body style="margin:0"><svg id="root" width="400" height="200" viewBox="-10 -5 100 50" style="position:absolute;left:30px;top:15px"><rect id="ground" width="100" height="50" fill="#eee"/></svg><svg id="viewed" width="300" height="160" style="position:absolute;left:40px;top:240px"></svg><pre id="result">vector-scene-pending</pre></body></html>
 `;
 
 	// 5. a static server: the page, and the installed package's files under its versioned address
