@@ -7,6 +7,7 @@
 // over the fake platform (test/support/fake-dom.js) and the recording platform (test/support/recording-platform.js).
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import vm from "node:vm";
 
 import { openScene } from "@apnex/vector-scene";
 import { visibleAnswer } from "../../dist/scene-view.js";
@@ -156,6 +157,18 @@ test("I17, VS2 rule 1, VS14: setView reads its argument by descriptor -- x, y, t
 	const malformed = [null, undefined, 5, "view", () => {}, [0, 0, 1], proto, accessor, revoked({}), trapping({ x: 0, y: 0, scale: 1 }, "ownKeys"), trapping({ x: 0, y: 0, scale: 1 }, "getOwnPropertyDescriptor"),
 		{ x: 0, y: 0 }, { y: 0, scale: 1 }, { x: 0, y: 0, scale: 1, z: 0 }, { x: undefined, y: 0, scale: 1 }, { x: "1", y: 0, scale: 1 }, { x: NaN, y: 0, scale: 1 }, { x: 0, y: Infinity, scale: 1 },
 		{ x: 0, y: 0, scale: 0 }, { x: 0, y: 0, scale: -0 }, { x: 0, y: 0, scale: -1 }, { x: 0, y: 0, scale: -Infinity }, { x: 0, y: 0, scale: 1n }];
+	// own x, y and scale, but no plain object: a class's instance, and a plain object made in another realm (VS2 rule 1)
+	const instance = new (class View {
+		constructor() {
+			this.x = 0;
+			this.y = 0;
+			this.scale = 1;
+		}
+	})();
+	const foreign = vm.runInNewContext("({ x: 0, y: 0, scale: 1 })");
+	assert.deepEqual(Reflect.ownKeys(instance), ["x", "y", "scale"], "control: the instance holds the view's own keys");
+	assert.deepEqual(Reflect.ownKeys(foreign), ["x", "y", "scale"], "control: so does the other realm's object");
+	malformed.push(instance, foreign);
 	malformed.forEach((value, index) => assert.throws(() => scene.setView(value), isTypeError("setView"), `malformed view ${index}`));
 	assert.equal(scene.view(), before);
 	assert.equal(log.length, writes, "no refusal wrote anything");
@@ -478,6 +491,63 @@ test("I19, VS17: onView answers a function that removes its listener, a second c
 	assert.deepEqual(calls, ["c"]);
 	assert.throws(() => scene.onView({}), isTypeError("onView"));
 	assert.throws(() => scene.onView(), isTypeError("onView"));
+});
+
+test("I19, VS17 rule 5: one function registered twice is two listeners, and each removal removes its own registration -- f, g, f with the second f removed tells f then g", () => {
+	const { scene } = viewed();
+	const calls = [];
+	const f = () => calls.push("f");
+	const g = () => calls.push("g");
+	scene.onView(f);
+	scene.onView(g);
+	const removeSecondF = scene.onView(f);
+	scene.setView({ x: 0, y: 0, scale: 2 });
+	assert.deepEqual(calls, ["f", "g", "f"], "control: three listeners, f twice");
+	calls.length = 0;
+	removeSecondF();
+	scene.setView({ x: 0, y: 0, scale: 3 });
+	assert.deepEqual(calls, ["f", "g"], "the second f removed, the first kept in its place");
+});
+
+test("I19, VS17 rule 2: the listeners told are those registered once every layer is written -- one removed by a platform method during the write is not told", () => {
+	const { hooks, scene } = viewed();
+	const calls = [];
+	scene.onView(() => calls.push("a"));
+	const removeB = scene.onView(() => calls.push("b"));
+	scene.onView(() => calls.push("c"));
+	let armed = true;
+	hooks.before = (entry) => {
+		if (!armed || entry[0] !== "set" || entry[2] !== "transform") return;
+		armed = false;
+		// the remover answers while the scene writes, where every function of the scene refuses
+		assert.equal(removeB(), undefined);
+		assert.throws(() => scene.view(), isBaseError("view"), "control: the scene is writing");
+	};
+	scene.setView({ x: 0, y: 0, scale: 2 });
+	assert.equal(armed, false, "control: the platform method ran during the write");
+	assert.deepEqual(calls, ["a", "c"], "b, removed during the write, not told");
+});
+
+test("I19, VS17 rule 5: the function onView answers removes its listener in every state of the scene -- writing, closed and failed included -- answering undefined and never throwing", () => {
+	// closed
+	const closing = viewed();
+	const closedCalls = [];
+	const removeOnClosed = closing.scene.onView(() => closedCalls.push("a"));
+	const removeOnClosedTwice = closing.scene.onView(() => closedCalls.push("b"));
+	closing.scene.close();
+	assert.equal(removeOnClosed(), undefined, "after close");
+	assert.equal(removeOnClosed(), undefined, "and a second time");
+	assert.equal(removeOnClosedTwice.call(undefined), undefined, "with no receiver");
+	// failed: a platform write that throws
+	const failing = viewed();
+	const removeOnFailed = failing.scene.onView(() => {});
+	failing.hooks.before = (entry) => {
+		if (entry[0] === "set" && entry[2] === "transform") throw new Error("the platform refused the transform");
+	};
+	assert.throws(() => failing.scene.setView({ x: 1, y: 1, scale: 1 }), /refused the transform/);
+	assert.throws(() => failing.scene.view(), isBaseError("view"), "control: the scene failed");
+	assert.equal(removeOnFailed(), undefined, "after a failure");
+	assert.equal(removeOnFailed(), undefined, "and a second time");
 });
 
 test("I19, VS17: the first listener to throw stops the rest, its error propagating with the view written and the scene open; a visible() that fails is the same", () => {
