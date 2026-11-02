@@ -296,3 +296,34 @@ The verifier failed move 1 on one blocking finding and four test gaps, the gate,
 - S3 -- erratum 1 was untested at the write, a mutant taking the listeners before the write surviving: a platform method removing a listener during the write, that listener is not told; the mutant fails that test.
 - S4 -- erratum 6 was in this record alone: VS17 rule 5 now states that the remover answers in every state, and a test removes listeners after `close` and after a failed write, and during a write; a mutant making the remover throw once closed fails it.
 - This entry's sentence on which tests of `0.2.0` changed named the lists of the scene's keys alone; it now names every pin that grew with the contract.
+
+---
+
+## D7 - The view in Chrome, and the release of 0.3.0 by this repository's CI
+
+**Ruled by:** the director, 2026-11-01 (draw's `H26-23`, `PAN-ZOOM.md` revision 10, section 5.1's move 2 and appendix A's five rows for it).\
+**Affects:** `CONTRACT.md`, `test/browser/`, `test/contract/`, `tools/consumer-test.mjs` and `package.json` and its lockfile.
+
+**Ruling.**\
+The view `D6` contracted is held in Chrome: I21, a viewed scene on a root placed by a translation, on one under a CSS `scale(2)` and on one resized between views, against screen positions calculated from the page's layout and the view alone; I22, the range's edges drawn and hit through the scene's own writes, and nothing written past them; and I23, `visible()` handed straight to `snap-grid`'s `inView`.\
+The consumer test opens a viewed scene in its page, on the packed file as a release does.\
+`0.3.0` is released by this repository's own CI on the tag `v0.3.0` once the move's verifier passes it, as `0.2.0` was; the release workflow takes the version from `package.json` and refuses a tag that differs, so it needs no change.
+
+**Choices made at build.**\
+Each a test can hold is held by one:
+- I21 is `test/browser/viewed-scene.test.js` and its page `test/browser/i21-page.html`: three roots with no `viewBox`, each a scene layer between a foreign layer beneath and one above, the items at known drawing coordinates; the root moved 37 pixels right and 23 down, 400 by 300; one 200 by 150 inside a box moved 480 right and 20 down and scaled by 2 with CSS; and one 300 by 200 at 41 and 360, resized to 360 by 240 between views.
+- The screen positions are calculated in the test from the layout's numbers and the view, never from the scene or `getScreenCTM`: a drawing point's screen position is the root's corner plus the root's scale times the view's times its distance from the view's top-left; the platform's own boxes of the items are held to them within 0.02 pixels, and the view's top-left to the root's corner exactly.
+- The conversions are held to `DOMPoint` over the root's screen transform and the view under `Object.is`, 400 points each way at each of four views on each root, and `toScreen` also to `DOMPoint` over the layer element's own `getScreenCTM`, the platform's composition of the transform the scene wrote, within a part in 10^5.
+- `itemOf` is asked of the platform's topmost element at each point, `document.elementFromPoint`, and `itemAt` of the point; the hit test's views are each a region holding every point asked -- a panned view at the root's own pixel a unit, one zoomed in and one out -- since a point beyond the root is answered by nothing of it.
+- I22 is `test/browser/transform-range.test.js` and its page `test/browser/i22-page.html`, the drafter's `transform-range.mjs` through the scene: the view written by `setView`, the bar by `put`, the drawn edges read from a screenshot of the row as the probe reads them, and the hit by `itemAt` by eighths of a pixel; a write past an edge is looked for by a `MutationObserver` over the root's subtree.
+- The member edges are held at scales 1 and 4, each sign: at a scale of 2^-16 a member of 2^24 puts a shape at 2^40 drawing units, which single precision draws nowhere, as section 3.2 says of a shape far out -- the range bounds what the scene writes, not where a shape lies -- and as the probe measured.
+- I22's budgets: within a tenth of a pixel drawn and a quarter hit at the scale's edges, and at a member of 2^24 within single precision's resolution there, a pixel drawn and two hit; measured, the scale at 2^16 is drawn 0 and 0.004 pixels from its edges and hit 0 and 0.125, at 2^-16 drawn 0 and 0 and hit 0.125 and 0, a member of -2^24 drawn 1 and 1 and hit 0 and 2, as the probe measured, and a member of 2^24 drawn 0 and 0 and hit 0.375 on either side.
+- `snap-grid` `0.1.0`, the release draw pins, is a development dependency pinned to its release file by its URL and, in the lockfile, by its hash, which equals the release's published SHA-512; the tests alone import it, and the packed file holds nothing of it.
+- I23 is in `test/contract/scene-view.test.js`, in Node over the fake platform: the positions `inView` answers are computed in the test, by row then by column, and its stride at a least spacing.
+
+**Faults planted.**\
+Each fault was planted in the transform in a copy of this repository, built, and run against I21's and I22's Chrome tests alone; each was failed by them:
+- F1 -- the translation written with its sign flipped: 9 of 9 failed.
+- F2 -- the transform written on scene layers alone, not foreign ones: 7 of 9 failed, every test of I21.
+- F3 -- the translation not scaled, `-x` and `-y` written for `-s * x` and `-s * y`: 9 of 9 failed.
+- F4 -- the scale written a thousandth short: 7 of 9 failed, both of I22 and the drawing and conversion tests of I21.
