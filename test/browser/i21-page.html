@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>vector-scene I21</title>
+<script type="importmap">{ "imports": { "@apnex/vector-scene": "/dist/index.js" } }</script>
+<style>
+html, body { margin: 0; }
+svg { display: block; background: #eee; }
+</style>
+</head>
+<body>
+<!-- three roots, none with a viewBox, each placed where the test knows it independently of the scene: one moved
+37 px right and 23 down; one 200 by 150 inside a box moved 480 right and 20 down and scaled by 2 with CSS, so
+400 by 300 on screen; one 41 right and 360 down, which the page resizes between views -->
+<svg id="moved" width="400" height="300" style="position: absolute; left: 37px; top: 23px"></svg>
+<div style="position: absolute; left: 480px; top: 20px; transform: scale(2); transform-origin: 0 0"><svg id="scaled" width="200" height="150"></svg></div>
+<svg id="resized" width="300" height="200" style="position: absolute; left: 41px; top: 360px"></svg>
+<script type="module" src="/test/browser/i21-page.js"></script>
+</body>
+</html>

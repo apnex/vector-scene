@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import vm from "node:vm";
 
+import { openGrid } from "@apnex/snap-grid";
 import { openScene } from "@apnex/vector-scene";
 import { visibleAnswer } from "../../dist/scene-view.js";
 import { fakeRoot, matrix } from "../support/fake-dom.js";
@@ -387,6 +388,37 @@ test("I18, VS15: the far-edge check, on synthetic rectangles whose members are f
 		assert.throws(() => visibleAnswer("visible", x, y, w, h, 1), (e) => isBaseError("visible")(e) && /far edges/.test(e.message), JSON.stringify([x, y, w, h]));
 	}
 	for (const args of [[NaN, 0, 1, 1, 1], [0, 0, Infinity, 1, 1], [0, 0, 1, 1, 0], [0, 0, 1, 1, -1], [0, 0, 1, 1, NaN]]) assert.throws(() => visibleAnswer("visible", ...args), isBaseError("visible"), JSON.stringify(args));
+});
+
+test("I23, VS15: visible() handed straight to the pinned snap-grid's inView answers the positions in its region -- kind 'rect' among the region's members -- thinned at its scale", () => {
+	const { root, scene } = viewed({ ctm: { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20 } });
+	const opened = openGrid({ shape: "square", pitch: 60, origin: { x: 30, y: 30 } });
+	assert.equal(opened.ok, true, JSON.stringify(opened.problems));
+	const { grid } = opened;
+	scene.setView({ x: -100, y: -60, scale: 0.5 });
+	const visible = scene.visible();
+	assert.equal(visible.region.kind, "rect");
+	// the region is x -100 to 700 and y -60 to 540, the screen 2 * 0.5 pixels a unit: positions every 60 from 30
+	const answer = grid.inView(visible);
+	assert.equal(answer.stride, 1);
+	const xs = [], ys = [];
+	for (let x = -90; x <= 690; x += 60) xs.push(x);
+	for (let y = -30; y <= 510; y += 60) ys.push(y);
+	assert.deepEqual(answer.positions.map((p) => [p.point.x, p.point.y]), ys.flatMap((y) => xs.map((x) => [x, y])), "every position in the closed region, by row then by column");
+	assert.equal(answer.positions.length, 14 * 10);
+	// at 24 pixels least, the stride doubles while 60 * 1 * stride falls short; zoomed out, the same region thins
+	assert.equal(grid.inView(visible, { minSpacing: 24 }).stride, 1);
+	assert.equal(grid.inView(visible, { minSpacing: 100 }).stride, 2);
+	scene.setView({ x: -1000, y: -600, scale: 2 ** -4 });
+	const far = scene.visible();
+	assert.deepEqual(far.region, { kind: "rect", x: -1000, y: -600, w: 400 * 16, h: 300 * 16 });
+	assert.equal(far.scale, 2 * 2 ** -4);
+	const thinned = grid.inView(far, { minSpacing: 24 });
+	assert.equal(thinned.stride, 4, "60 * 0.125 * 4 = 30, the least stride reaching 24 pixels");
+	assert.ok(thinned.positions.length > 0 && thinned.positions.every(({ point }) => point.x >= -1000 && point.x <= 5400 && point.y >= -600 && point.y <= 4200));
+	// a root not yet laid out answers a region of no width, which inView accepts
+	root.clientWidth = 0;
+	assert.deepEqual(grid.inView(scene.visible()).positions, []);
 });
 
 // ---- VS16: zoomAbout ----
