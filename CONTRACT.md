@@ -1,9 +1,9 @@
 ---
-id: unminted
+id: C14
 category: component
 title: vector-scene - show an application's shapes, held as data in declared layers under its keys, exactly as described
-status: draft
-hydrate-when: An application draws its own content as SVG and must keep that drawing in step with its data, draw it where there is no browser, or say which of its things a pointer landed on
+status: active
+hydrate-when: Your application draws its own content as SVG and you need to keep that drawing in step with its data, draw it where there is no browser, or say which of its things a pointer landed on
 sovereignty: internal
 supersedes: []
 related: [C0, A3]
@@ -12,8 +12,8 @@ related: [C0, A3]
 # vector-scene
 
 The contract of record for vector-scene `0.3.0`, each rule stated on its own terms; what was settled at each build is in `docs/DECISIONS.md` (`D2` for `0.1.0`, `D3` for `0.2.0`, `D6` for `0.3.0`).\
-It also carries the fields of a mission-kit registry entry, and that entry is generated from this file when the component is filed, never written as a second copy.\
-The registry id is unminted on purpose; one is minted only when the entry is admitted to the registry.
+It also carries the fields of a mission-kit registry entry, and that entry is generated from this file, never written as a second copy.\
+Admitted to mission-kit's component registry as `C14` on 2026-11-06 (`docs/DECISIONS.md` `D8`); its frontmatter is the entry's.
 
 ---
 
@@ -354,7 +354,7 @@ The design of record and the rulings are kept in draw's records, `apnex/drawv2`.
 - The same drawing must also be produced where there is no browser, from the same code.
 - Something must say which of its things a pointer landed on, by the platform's own hit test.
 - Something must say what lies under a captured pointer, whose every event targets the capturing element -- `itemAt`.
-- The drawing must be panned and zoomed by a view the scene writes on its layers, each layer told what is visible -- a declaration's `view`.
+- The drawing must be panned and zoomed by a view the scene writes on its layers, each listener told what is visible -- a declaration's `view`.
 
 **It is the wrong tool when:**
 
